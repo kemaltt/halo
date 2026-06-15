@@ -105,11 +105,13 @@ interviewAssistant.on('error', (msg: string) =>
 // never from the renderer. Re-apply whenever either changes.
 let interviewEnabled = false
 let interviewCv = ''
+let interviewGlossary = ''
 function applyInterviewConfig(): void {
   interviewAssistant.setConfig({
     enabled: interviewEnabled,
     apiKey: getSecret('anthropic'),
-    cvText: interviewCv
+    cvText: interviewCv,
+    glossary: interviewGlossary
   })
 }
 
@@ -335,9 +337,10 @@ ipcMain.on('audio:chunk-mic', (_event, chunk: Buffer) => {
 
 ipcMain.handle('overlay:hide', () => { overlayWindow?.hide() })
 ipcMain.handle('overlay:show', () => { overlayWindow?.show() })
-ipcMain.handle('interview:config', (_e, cfg: { enabled: boolean; cvText: string }) => {
+ipcMain.handle('interview:config', (_e, cfg: { enabled: boolean; cvText: string; glossary: string }) => {
   interviewEnabled = cfg.enabled
   interviewCv = cfg.cvText
+  interviewGlossary = cfg.glossary || ''
   applyInterviewConfig()
 })
 

@@ -396,6 +396,21 @@ export default function SettingsView({ settings, keyStatus, onSave }: Props) {
           <MicField deviceId={form.micDeviceId} onChange={v => set('micDeviceId', v)} />
         </section>
 
+        {/* ── Glossary / terms ── */}
+        <section className="settings-card">
+          <div className="field">
+            <label>Sözlük / Terimler</label>
+            <textarea
+              className="input cv-textarea"
+              placeholder="Her satıra bir isim/terim — örn:&#10;Kubernetes&#10;Anthropic&#10;Kemal Tütüncü"
+              value={form.glossary}
+              onChange={e => set('glossary', e.target.value)}
+              rows={4}
+            />
+            <p className="hint">AI'ın cevap/analiz/özetlerinde bu isim/terimleri doğru yazması için bağlam (canlı altyazıyı etkilemez).</p>
+          </div>
+        </section>
+
         {/* ── Interview mode (Phase 4) ── */}
         <section className="settings-card accent">
         <div className="field">

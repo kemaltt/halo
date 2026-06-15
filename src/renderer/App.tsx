@@ -18,6 +18,7 @@ export interface Settings {
   sourceLang: string
   targetLang: string
   micDeviceId: string   // '' = system default input
+  glossary: string      // user terms/names, one per line — context for AI steps
   // Interview mode (Phase 4)
   interviewMode: boolean
   cvText: string
@@ -38,6 +39,7 @@ function readSettings(): Settings {
     sourceLang:    localStorage.getItem('subtl_source_lang') || 'auto',
     targetLang:    localStorage.getItem('subtl_target_lang') || 'tr-TR',
     micDeviceId:   localStorage.getItem('subtl_mic_device') || '',
+    glossary:      localStorage.getItem('subtl_glossary') || '',
     interviewMode: localStorage.getItem('subtl_interview_mode') === '1',
     cvText:        localStorage.getItem('subtl_cv_text') || ''
   }
@@ -46,7 +48,8 @@ function readSettings(): Settings {
 function pushInterviewConfig(s: Settings): void {
   window.subtl.setInterviewConfig({
     enabled: s.interviewMode,
-    cvText: s.cvText
+    cvText: s.cvText,
+    glossary: s.glossary
   })
 }
 
@@ -292,6 +295,7 @@ export default function App() {
     localStorage.setItem('subtl_source_lang',    s.sourceLang)
     localStorage.setItem('subtl_target_lang',    s.targetLang)
     localStorage.setItem('subtl_mic_device',     s.micDeviceId)
+    localStorage.setItem('subtl_glossary',       s.glossary)
     localStorage.setItem('subtl_interview_mode', s.interviewMode ? '1' : '0')
     localStorage.setItem('subtl_cv_text',        s.cvText)
     pushInterviewConfig(s)

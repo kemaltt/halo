@@ -18,6 +18,7 @@ export interface InterviewConfig {
   enabled: boolean
   apiKey: string
   cvText: string
+  glossary?: string
 }
 
 export interface Suggestion {
@@ -180,7 +181,8 @@ export class InterviewAssistant extends EventEmitter {
         `can say aloud, 3-5 sentences, grounded in the CV, in the SAME language as the ` +
         `question>"}\n\n` +
         `Output ONLY the JSON object. No prose, no code fences.\n\n` +
-        `Candidate CV:\n${this.config.cvText || '(no CV provided — give a strong generic answer)'}`,
+        `Candidate CV:\n${this.config.cvText || '(no CV provided — give a strong generic answer)'}` +
+        this.glossaryBlock(),
       messages: [{
         role: 'user',
         content:
@@ -203,6 +205,15 @@ export class InterviewAssistant extends EventEmitter {
     if (!turn) return
     this.history.push(turn)
     if (this.history.length > HISTORY_MAX) this.history = this.history.slice(-HISTORY_MAX)
+  }
+
+  /** User glossary appended to every prompt so names/terms stay correct. */
+  private glossaryBlock(): string {
+    const g = (this.config.glossary || '').trim()
+    return g
+      ? `\n\nKnown names/terms — use these EXACT spellings and keep brand/product names ` +
+        `untranslated wherever they appear:\n${g}`
+      : ''
   }
 
   /**
@@ -254,7 +265,8 @@ export class InterviewAssistant extends EventEmitter {
         `Using the CV, write a strong, specific first-person answer ("I …") the candidate can ` +
         `say aloud: 3-5 sentences, grounded in the CV, in the SAME language as the utterance. ` +
         `Output only the answer — no preamble, no quotes.\n\n` +
-        `Candidate CV:\n${this.config.cvText || '(no CV provided — give a strong generic answer)'}`,
+        `Candidate CV:\n${this.config.cvText || '(no CV provided — give a strong generic answer)'}` +
+        this.glossaryBlock(),
       messages: [{
         role: 'user',
         content:
@@ -300,7 +312,7 @@ export class InterviewAssistant extends EventEmitter {
     const resp = await this.client.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system,
+      system: system + this.glossaryBlock(),
       messages: [{ role: 'user', content: transcript }]
     })
 
@@ -354,7 +366,8 @@ export class InterviewAssistant extends EventEmitter {
         `to prepare for next time.\n` +
         `Be specific and grounded in the CV; avoid generic filler. Use clear headings and short bullets. ` +
         `Reply in the language of the candidate's answers (Turkish if they are Turkish), otherwise English.\n\n` +
-        `Candidate CV:\n${this.config.cvText || '(no CV provided)'}`,
+        `Candidate CV:\n${this.config.cvText || '(no CV provided)'}` +
+        this.glossaryBlock(),
       messages: [{ role: 'user', content: transcript }]
     })
 
