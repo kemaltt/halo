@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain, globalShortcut, screen, session, systemPreferences } from 'electron'
+import { app, BrowserWindow, ipcMain, globalShortcut, screen, session, systemPreferences, dialog } from 'electron'
 import { join } from 'path'
+import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
 import { initMain as initLoopbackAudio } from 'electron-audio-loopback'
 import type { TranslationProvider, ProviderType } from './providers/TranslationProvider'
@@ -29,9 +30,29 @@ let candidateStt: TranslationProvider | null = null
 interface HistoryEntry { original: string; translated: string; answer?: string; myAnswer?: string }
 let sessionLog: HistoryEntry[] = []
 
+// Persist the session log to disk (userData) so it survives restarts. Stays
+// local — consistent with the "your data never leaves the device" stance.
+const sessionFile = (): string => join(app.getPath('userData'), 'halo-session.json')
+function loadSession(): void {
+  try {
+    const f = sessionFile()
+    if (existsSync(f)) sessionLog = JSON.parse(readFileSync(f, 'utf8')) as HistoryEntry[]
+  } catch (e) { console.error('[session] load failed:', e) }
+}
+function persistSession(): void {
+  try { writeFileSync(sessionFile(), JSON.stringify(sessionLog), { mode: 0o600 }) }
+  catch (e) { console.error('[session] write failed:', e) }
+}
+
 function broadcast(channel: string, payload?: unknown): void {
   overlayWindow?.webContents.send(channel, payload)
   sessionWindow?.webContents.send(channel, payload)
+}
+
+// Persist + push the full history to any open session window.
+function emitSession(): void {
+  persistSession()
+  broadcast('session:update', sessionLog)
 }
 
 // Append a finalized transcript turn (deduped against the previous one).
@@ -42,7 +63,7 @@ function recordTurn(original: string, translated: string): void {
   const last = sessionLog[sessionLog.length - 1]
   if (last && last.original === o && last.translated === t) return
   sessionLog.push({ original: o, translated: t })
-  broadcast('session:update', sessionLog)
+  emitSession()
 }
 
 // Attach a finalized candidate (mic) utterance to the latest question as the
@@ -53,7 +74,7 @@ function recordCandidateAnswer(text: string): void {
   const last = sessionLog[sessionLog.length - 1]
   if (last) last.myAnswer = `${last.myAnswer ? last.myAnswer + ' ' : ''}${t}`.trim()
   else sessionLog.push({ original: '', translated: '', myAnswer: t })
-  broadcast('session:update', sessionLog)
+  emitSession()
 }
 
 async function stopCandidateStt(): Promise<void> {
@@ -75,7 +96,7 @@ interviewAssistant.on('suggestion', (data: Suggestion) => {
   else sessionLog.push({ original: data.original, translated: data.translated, answer: data.answer })
 
   broadcast('suggestion:update', data)    // latest answer → overlay panel
-  broadcast('session:update', sessionLog) // full history → history window
+  emitSession() // full history → history window
 })
 interviewAssistant.on('error', (msg: string) =>
   broadcast('suggestion:error', msg))
@@ -347,7 +368,7 @@ ipcMain.handle('session:list', () => sessionLog)
 ipcMain.handle('session:clear', () => {
   sessionLog = []
   interviewAssistant.reset()
-  broadcast('session:update', sessionLog)
+  emitSession()
 })
 ipcMain.handle('session:summarize', async () => {
   return interviewAssistant.summarize(sessionLog)
@@ -356,12 +377,47 @@ ipcMain.handle('session:summarize', async () => {
 // may differ from the suggested one).
 ipcMain.handle('session:set-answer', (_e, index: number, text: string) => {
   const entry = sessionLog[index]
-  if (entry) { entry.myAnswer = text; broadcast('session:update', sessionLog) }
+  if (entry) { entry.myAnswer = text; emitSession() }
 })
 // Coaching analysis of questions + the candidate's actual answers.
 ipcMain.handle('session:analyze', async () => {
   return interviewAssistant.analyze(sessionLog)
 })
+// Export the history to a file the user picks (.md or .txt).
+ipcMain.handle('session:export', async (_e, format: 'md' | 'txt') => {
+  if (sessionLog.length === 0) return { ok: false, error: 'Kayıt yok.' }
+  const content = format === 'md' ? sessionToMarkdown() : sessionToPlain()
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')
+  const { canceled, filePath } = await dialog.showSaveDialog({
+    title: 'Oturumu dışa aktar',
+    defaultPath: `halo-session-${stamp}.${format}`,
+    filters: [{ name: format === 'md' ? 'Markdown' : 'Text', extensions: [format] }]
+  })
+  if (canceled || !filePath) return { ok: false }
+  try { writeFileSync(filePath, content, 'utf8'); return { ok: true, path: filePath } }
+  catch (e: any) { return { ok: false, error: e?.message || 'Yazılamadı' } }
+})
+
+function sessionToMarkdown(): string {
+  const lines = ['# Halo — Oturum', '', `_${new Date().toLocaleString()}_`, '']
+  sessionLog.forEach((e, i) => {
+    lines.push(`## ${i + 1}. ${e.original || e.translated}`)
+    if (e.original && e.translated && e.original !== e.translated) lines.push(`*${e.translated}*`)
+    if (e.answer) lines.push('', `**💡 Önerilen:** ${e.answer}`)
+    if (e.myAnswer) lines.push('', `**🎙 Senin cevabın:** ${e.myAnswer}`)
+    lines.push('')
+  })
+  return lines.join('\n')
+}
+function sessionToPlain(): string {
+  return sessionLog.map((e, i) => {
+    let b = `${i + 1}. ${e.original || e.translated}`
+    if (e.original && e.translated && e.original !== e.translated) b += `\n   (${e.translated})`
+    if (e.answer) b += `\n   [Önerilen] ${e.answer}`
+    if (e.myAnswer) b += `\n   [Senin cevabın] ${e.myAnswer}`
+    return b
+  }).join('\n\n')
+}
 
 ipcMain.handle('settings:open', () => { createSettingsWindow() })
 ipcMain.handle('settings:close', () => {
@@ -371,6 +427,9 @@ ipcMain.handle('settings:close', () => {
 // ── App lifecycle ─────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
+  // Restore the previous session history from disk.
+  loadSession()
+
   // macOS: trigger the system mic prompt (and surface current status in dev).
   if (process.platform === 'darwin') {
     const status = systemPreferences.getMediaAccessStatus('microphone')

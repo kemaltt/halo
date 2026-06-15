@@ -1,6 +1,124 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { Settings, ProviderType, KeyStatus } from '../App'
 import type { SecretName } from '../env'
+
+// Custom dropdown — styled trigger + popover list, so the open menu matches the
+// dark theme (native <select> popups are OS-rendered and can't be styled).
+interface DropOption { value: string; label: string }
+function Dropdown({ value, options, onChange, ariaLabel }: {
+  value: string; options: DropOption[]; onChange: (v: string) => void; ariaLabel?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement | null>(null)
+  const selected = options.find(o => o.value === value)
+
+  useEffect(() => {
+    if (!open) return
+    const onDoc = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('mousedown', onDoc); document.removeEventListener('keydown', onKey) }
+  }, [open])
+
+  return (
+    <div className={`dropdown ${open ? 'open' : ''}`} ref={ref}>
+      <button type="button" className="dropdown-trigger" aria-label={ariaLabel} onClick={() => setOpen(o => !o)}>
+        <span className="dropdown-value">{selected?.label ?? '—'}</span>
+        <svg className="dropdown-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+      </button>
+      {open && (
+        <div className="dropdown-menu" role="listbox">
+          {options.map((o, i) => (
+            <button
+              key={o.value || i}
+              type="button"
+              role="option"
+              aria-selected={o.value === value}
+              className={`dropdown-item ${o.value === value ? 'selected' : ''}`}
+              onClick={() => { onChange(o.value); setOpen(false) }}
+            >
+              <span>{o.label}</span>
+              {o.value === value && <span className="dropdown-check">✓</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Microphone picker + live level meter / test. Runs locally (no API/cost);
+// also triggers the OS mic-permission prompt, which fills in device labels.
+function MicField({ deviceId, onChange }: { deviceId: string; onChange: (id: string) => void }) {
+  const [devices, setDevices] = useState<MediaDeviceInfo[]>([])
+  const [testing, setTesting] = useState(false)
+  const [level, setLevel] = useState(0)
+  const streamRef = useRef<MediaStream | null>(null)
+  const ctxRef = useRef<AudioContext | null>(null)
+  const rafRef = useRef<number>(0)
+
+  const refreshDevices = async () => {
+    try {
+      const list = await navigator.mediaDevices.enumerateDevices()
+      setDevices(list.filter(d => d.kind === 'audioinput'))
+    } catch { /* ignore */ }
+  }
+
+  const stop = () => {
+    cancelAnimationFrame(rafRef.current)
+    streamRef.current?.getTracks().forEach(t => t.stop()); streamRef.current = null
+    ctxRef.current?.close().catch(() => {}); ctxRef.current = null
+    setTesting(false); setLevel(0)
+  }
+
+  useEffect(() => { void refreshDevices(); return () => stop() }, [])
+
+  const test = async () => {
+    if (testing) { stop(); return }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: deviceId ? { deviceId: { ideal: deviceId } } : true
+      })
+      streamRef.current = stream
+      await refreshDevices() // labels are available now that permission is granted
+      const ctx = new AudioContext(); ctxRef.current = ctx
+      const analyser = ctx.createAnalyser(); analyser.fftSize = 512
+      ctx.createMediaStreamSource(stream).connect(analyser)
+      const data = new Uint8Array(analyser.frequencyBinCount)
+      const tick = () => {
+        analyser.getByteTimeDomainData(data)
+        let sum = 0
+        for (let i = 0; i < data.length; i++) { const v = (data[i] - 128) / 128; sum += v * v }
+        setLevel(Math.min(1, Math.sqrt(sum / data.length) * 2.5))
+        rafRef.current = requestAnimationFrame(tick)
+      }
+      setTesting(true); tick()
+    } catch { stop() } // permission denied / no device
+  }
+
+  return (
+    <div className="field">
+      <label>Mikrofon</label>
+      <Dropdown
+        ariaLabel="Mikrofon"
+        value={deviceId}
+        onChange={onChange}
+        options={[
+          { value: '', label: 'Varsayılan giriş' },
+          ...devices.map((d, i) => ({ value: d.deviceId, label: d.label || `Mikrofon ${i + 1}` }))
+        ]}
+      />
+      <div className="mic-test">
+        <button type="button" className="btn-ghost" onClick={test}>
+          {testing ? 'Durdur' : 'Test et'}
+        </button>
+        <div className="level-bar"><div className="level-fill" style={{ width: `${Math.round(level * 100)}%` }} /></div>
+      </div>
+      <p className="hint">Test'e basıp konuşun; çubuk oynuyorsa mikrofon çalışıyor.</p>
+    </div>
+  )
+}
 
 const LANGUAGES = [
   { code: 'auto', label: '🔍 Auto-detect' },
@@ -253,30 +371,29 @@ export default function SettingsView({ settings, keyStatus, onSave }: Props) {
         <section className="settings-card">
         <div className="field">
           <label>Source Language (speaker)</label>
-          <select
+          <Dropdown
+            ariaLabel="Source language"
             value={form.sourceLang}
-            onChange={e => set('sourceLang', e.target.value)}
-            className="select"
-          >
-            {LANGUAGES.map(l => (
-              <option key={l.code} value={l.code}>{l.label}</option>
-            ))}
-          </select>
+            onChange={v => set('sourceLang', v)}
+            options={LANGUAGES.map(l => ({ value: l.code, label: l.label }))}
+          />
           <p className="hint">Manual selection improves accuracy (especially DE/EN mix)</p>
         </div>
 
         <div className="field">
           <label>Target Language (your language)</label>
-          <select
+          <Dropdown
+            ariaLabel="Target language"
             value={form.targetLang}
-            onChange={e => set('targetLang', e.target.value)}
-            className="select"
-          >
-            {LANGUAGES.filter(l => l.code !== 'auto').map(l => (
-              <option key={l.code} value={l.code}>{l.label}</option>
-            ))}
-          </select>
+            onChange={v => set('targetLang', v)}
+            options={LANGUAGES.filter(l => l.code !== 'auto').map(l => ({ value: l.code, label: l.label }))}
+          />
         </div>
+        </section>
+
+        {/* ── Audio / microphone ── */}
+        <section className="settings-card">
+          <MicField deviceId={form.micDeviceId} onChange={v => set('micDeviceId', v)} />
         </section>
 
         {/* ── Interview mode (Phase 4) ── */}

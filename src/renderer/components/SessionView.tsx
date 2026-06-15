@@ -8,6 +8,7 @@ export default function SessionView() {
   const [summarizing, setSummarizing] = useState(false)
   const [analysis, setAnalysis] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const [error, setError] = useState('')
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
@@ -142,6 +143,21 @@ export default function SessionView() {
         <button className="btn-ghost" onClick={copyTranscript} disabled={entries.length === 0}>
           Kopyala
         </button>
+        <div className="export-wrap">
+          {exportOpen && (
+            <div className="export-menu" onMouseLeave={() => setExportOpen(false)}>
+              <button onClick={() => { setExportOpen(false); window.subtl.exportSession('md') }}>Markdown (.md)</button>
+              <button onClick={() => { setExportOpen(false); window.subtl.exportSession('txt') }}>Düz metin (.txt)</button>
+            </div>
+          )}
+          <button
+            className="btn-ghost"
+            onClick={() => setExportOpen(o => !o)}
+            disabled={entries.length === 0}
+          >
+            Dışa aktar ▾
+          </button>
+        </div>
         <button className="btn-ghost danger" onClick={clearAll} disabled={entries.length === 0}>
           Temizle
         </button>

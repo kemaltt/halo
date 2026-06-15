@@ -17,6 +17,7 @@ export interface Settings {
   provider: ProviderType
   sourceLang: string
   targetLang: string
+  micDeviceId: string   // '' = system default input
   // Interview mode (Phase 4)
   interviewMode: boolean
   cvText: string
@@ -36,6 +37,7 @@ function readSettings(): Settings {
     provider:      (localStorage.getItem('subtl_provider') as ProviderType) || 'gemini',
     sourceLang:    localStorage.getItem('subtl_source_lang') || 'auto',
     targetLang:    localStorage.getItem('subtl_target_lang') || 'tr-TR',
+    micDeviceId:   localStorage.getItem('subtl_mic_device') || '',
     interviewMode: localStorage.getItem('subtl_interview_mode') === '1',
     cvText:        localStorage.getItem('subtl_cv_text') || ''
   }
@@ -53,8 +55,10 @@ const DEFAULT_SETTINGS: Settings = readSettings()
 // Microphone (own voice). On macOS this is the 'mic' source; in interview mode
 // it also feeds the candidate transcription.
 async function getMicStream(): Promise<MediaStream> {
+  const deviceId = localStorage.getItem('subtl_mic_device') || ''
   return navigator.mediaDevices.getUserMedia({
     audio: {
+      ...(deviceId ? { deviceId: { ideal: deviceId } } : {}),
       sampleRate: 16000,
       channelCount: 1,
       echoCancellation: true,
@@ -287,6 +291,7 @@ export default function App() {
     localStorage.setItem('subtl_provider',       s.provider)
     localStorage.setItem('subtl_source_lang',    s.sourceLang)
     localStorage.setItem('subtl_target_lang',    s.targetLang)
+    localStorage.setItem('subtl_mic_device',     s.micDeviceId)
     localStorage.setItem('subtl_interview_mode', s.interviewMode ? '1' : '0')
     localStorage.setItem('subtl_cv_text',        s.cvText)
     pushInterviewConfig(s)

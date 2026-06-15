@@ -56,6 +56,7 @@ export interface SubtlBridge {
   clearSession: () => Promise<void>
   summarizeSession: () => Promise<string>
   analyzeSession: () => Promise<string>
+  exportSession: (format: 'md' | 'txt') => Promise<{ ok: boolean; path?: string; error?: string }>
   setMyAnswer: (index: number, text: string) => Promise<void>
   onSessionUpdate: (cb: (entries: SessionEntry[]) => void) => (() => void) | undefined
   onSettingsState: (cb: (open: boolean) => void) => (() => void) | undefined

@@ -80,6 +80,7 @@ contextBridge.exposeInMainWorld('subtl', {
   clearSession: () => ipcRenderer.invoke('session:clear'),
   summarizeSession: () => ipcRenderer.invoke('session:summarize'),
   analyzeSession: () => ipcRenderer.invoke('session:analyze'),
+  exportSession: (format: 'md' | 'txt') => ipcRenderer.invoke('session:export', format),
   // Record the candidate's own answer for question #index.
   setMyAnswer: (index: number, text: string) =>
     ipcRenderer.invoke('session:set-answer', index, text),
