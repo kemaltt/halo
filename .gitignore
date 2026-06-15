@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+
+# Build output
+out/
+dist/
+release/
+*.dmg
+*.zip
+
+# TypeScript incremental build info
+*.tsbuildinfo
+
+# Vite / electron-vite temp config artifacts
+*.timestamp-*.mjs
+electron.vite.config.*.mjs
+vite.config.*.mjs
+vite.tmp*.mjs
+
+# Secrets (keys live in the OS keychain via safeStorage, never here — but
+# ignore these just in case any local key/env file is ever created)
+.env
+.env.*
+*.pem
+*-secrets.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/

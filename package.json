@@ -1,0 +1,60 @@
+{
+  "name": "subtl",
+  "version": "0.1.0",
+  "description": "Real-time meeting translation overlay",
+  "main": "out/main/index.js",
+  "author": "Kemal",
+  "license": "MIT",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.104.1",
+    "@google/generative-ai": "^0.21.0",
+    "audiotee": "^0.0.7",
+    "electron-audio-loopback": "^1.0.6",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@electron-toolkit/preload": "^3.0.1",
+    "@electron-toolkit/tsconfig": "^1.0.1",
+    "@electron-toolkit/utils": "^3.0.0",
+    "@types/node": "^20.17.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/ws": "^8.5.13",
+    "@vitejs/plugin-react": "^4.3.3",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.subtl.app",
+    "productName": "Halo",
+    "asarUnpack": [
+      "**/node_modules/audiotee/bin/**"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": "dmg",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.plist",
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "Subtl needs the microphone to capture your own speech for translation.",
+        "NSAudioCaptureUsageDescription": "Subtl captures the other participant's audio so it can translate it in real time."
+      }
+    },
+    "files": [
+      "out/**/*"
+    ]
+  }
+}
