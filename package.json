@@ -53,6 +53,9 @@
         "NSAudioCaptureUsageDescription": "Subtl captures the other participant's audio so it can translate it in real time."
       }
     },
+    "win": {
+      "target": "nsis"
+    },
     "files": [
       "out/**/*"
     ]

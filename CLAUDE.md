@@ -26,7 +26,9 @@ mode, polish). macOS-only; Windows (Phase 6) not started.
 - **App:** Electron + React + TypeScript + Vite
 - **Audio capture (macOS):**
   - **Mic (own voice):** renderer `getUserMedia` → `AudioWorklet` (`src/renderer/audio/`) converts to 16 kHz PCM16 (replaced the deprecated `ScriptProcessorNode`) → IPC `audio:chunk` → provider.
-  - **System audio (other participant) — current:** `audiotee` (AudioTee.js) in the **main process** (`src/main/audio/SystemAudioCapture.ts`). 16 kHz request makes it emit 16-bit PCM directly to the provider — no renderer round-trip, no `getDisplayMedia`, audio-only permission ("System Audio Recording", `NSAudioCaptureUsageDescription`). ESM-only, so it's loaded via dynamic `import()`. macOS 14.2+.
+  - **System audio (other participant) — auto by OS** (`window.subtl.platform`):
+    - **macOS:** `audiotee` (AudioTee.js) in the **main process** (`src/main/audio/SystemAudioCapture.ts`). 16 kHz request → 16-bit PCM straight to the provider; no renderer round-trip, no `getDisplayMedia`, audio-only permission (`NSAudioCaptureUsageDescription`). ESM-only → dynamic `import()`. macOS 14.2+. Main starts it only when `process.platform === 'darwin'`.
+    - **Windows/other:** Electron **loopback** via `electron-audio-loopback` in the **renderer** (`getSystemLoopbackStream` → `getDisplayMedia` → AudioWorklet → `audio:chunk`). Same provider pipeline as the mic path.
   - **Candidate mic (interview mode):** in interview + system-audio mode, the renderer ALSO captures the mic into a **second, transcription-only provider session** (`audio:chunk-mic` → `candidateStt` in main). Used to record what the candidate actually answered — read only its `original` text, no translation. Two concurrent live sessions = ~2× API usage; headphones recommended (speaker bleed).
   - **Fallback (still wired, unused):** `electron-audio-loopback`.
 - **STT + translation:** Gemini 3.5 Live Translate (`gemini-3.5-live-translate-preview`) over WebSocket. Single session yields **both input (original) and output (translated) transcripts**.

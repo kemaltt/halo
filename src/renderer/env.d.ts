@@ -17,6 +17,8 @@ export interface KeyStatus {
 }
 
 export interface SubtlBridge {
+  platform: string  // process.platform of the host (e.g. 'darwin', 'win32')
+
   startTranslation: (opts: {
     provider: 'gemini' | 'openai'
     sourceLang: string

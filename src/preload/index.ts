@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer, clipboard } from 'electron'
 
 contextBridge.exposeInMainWorld('subtl', {
+  // Host OS — drives where system audio is captured (macOS = main/AudioTee,
+  // Windows/other = renderer loopback).
+  platform: process.platform,
+
   // Gemini control — the API key is NOT passed here; main reads it from secure
   // storage so the secret never lives in the renderer. For source 'system',
   // main captures audio itself (AudioTee); for 'mic' the renderer streams it.

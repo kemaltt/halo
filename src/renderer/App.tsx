@@ -50,8 +50,8 @@ function pushInterviewConfig(s: Settings): void {
 
 const DEFAULT_SETTINGS: Settings = readSettings()
 
-// Mic only. System audio (the other participant) is captured in the MAIN
-// process via AudioTee — it never flows through the renderer.
+// Microphone (own voice). On macOS this is the 'mic' source; in interview mode
+// it also feeds the candidate transcription.
 async function getMicStream(): Promise<MediaStream> {
   return navigator.mediaDevices.getUserMedia({
     audio: {
@@ -62,6 +62,23 @@ async function getMicStream(): Promise<MediaStream> {
       autoGainControl: true
     }
   })
+}
+
+// System audio (other participant) on Windows/other: Electron loopback via
+// getDisplayMedia (macOS uses main-process AudioTee instead, so this isn't
+// called there). We drop the unused video track and keep only the audio.
+async function getSystemLoopbackStream(): Promise<MediaStream> {
+  await window.subtl.enableLoopback()
+  try {
+    const stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true })
+    stream.getVideoTracks().forEach(t => { t.stop(); stream.removeTrack(t) })
+    if (stream.getAudioTracks().length === 0) {
+      throw new Error('Sistem sesi alınamadı (loopback boş) — ses paylaşımına izin verin.')
+    }
+    return stream
+  } finally {
+    await window.subtl.disableLoopback()
+  }
 }
 
 export default function App() {
@@ -173,13 +190,17 @@ export default function App() {
       })
       if (!res?.ok) throw new Error(res?.error || 'API key is not set. Open settings.')
 
-      // System audio is captured in main (AudioTee); only the mic path runs here.
-      if (audioSource === 'mic') {
+      // Capture for the MAIN provider (interviewer/translation):
+      //  - 'mic' source → renderer microphone
+      //  - 'system' on non-macOS → renderer loopback (macOS captures system
+      //    audio in the main process via AudioTee, so nothing runs here)
+      const captureSystemHere = audioSource === 'system' && window.subtl.platform !== 'darwin'
+      if (audioSource === 'mic' || captureSystemHere) {
         stage = 'audio'
-        const stream = await getMicStream()
+        const stream = audioSource === 'mic' ? await getMicStream() : await getSystemLoopbackStream()
 
-        // 16 kHz AudioContext resamples the ~48 kHz mic down to the 16 kHz PCM
-        // the providers expect.
+        // 16 kHz AudioContext resamples the source down to the 16 kHz PCM the
+        // providers expect.
         const audioCtx = new AudioContext({ sampleRate: 16000 })
         if (audioCtx.state === 'suspended') await audioCtx.resume()
         const source = audioCtx.createMediaStreamSource(stream)
@@ -240,7 +261,7 @@ export default function App() {
         setError(msg)
       } else {
         const label = stage === 'audio'
-          ? 'Mikrofon erişimi reddedildi/iptal edildi'
+          ? (audioSource === 'system' ? 'Sistem sesi alınamadı' : 'Mikrofon erişimi reddedildi/iptal edildi')
           : 'Ses işleme (AudioWorklet) başlatılamadı'
         setError(`${label}: ${msg}`)
       }

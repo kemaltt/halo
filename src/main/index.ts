@@ -252,9 +252,11 @@ ipcMain.handle('gemini:start', async (_, opts: { provider: ProviderType; sourceL
 
   await provider.start({ provider: providerType, apiKey, sourceLang: opts.sourceLang, targetLang: opts.targetLang })
 
-  // System audio is captured in main via AudioTee; mic audio still streams from
-  // the renderer over the audio:chunk channel.
-  if (opts.source === 'system') {
+  // System audio:
+  //  - macOS: captured here in main via AudioTee (Core Audio taps).
+  //  - Windows/other: captured in the renderer via loopback and streamed over
+  //    audio:chunk, so nothing to start here.
+  if (opts.source === 'system' && process.platform === 'darwin') {
     try {
       await systemAudio.start(
         (pcm16) => provider?.sendAudioChunk(pcm16),
