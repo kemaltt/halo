@@ -44,7 +44,7 @@ contextBridge.exposeInMainWorld('subtl', {
   // The Anthropic key is stored via setKey('anthropic', …), not here.
   setInterviewConfig: (cfg: { enabled: boolean; cvText: string; glossary: string }) =>
     ipcRenderer.invoke('interview:config', cfg),
-  onSuggestion: (cb: (data: { question: string; answer: string }) => void) => {
+  onSuggestion: (cb: (data: { question: string; answer: string; type?: string }) => void) => {
     ipcRenderer.on('suggestion:update', (_e, data) => cb(data))
     return () => ipcRenderer.removeAllListeners('suggestion:update')
   },

@@ -27,7 +27,7 @@ let candidateStt: TranslationProvider | null = null
 
 // Conversation history — the source of truth, accumulates across stop/start.
 // Works in both modes: plain transcript turns, plus answers in interview mode.
-interface HistoryEntry { original: string; translated: string; answer?: string; myAnswer?: string }
+interface HistoryEntry { original: string; translated: string; answer?: string; myAnswer?: string; qtype?: string }
 let sessionLog: HistoryEntry[] = []
 
 // Persist the session log to disk (userData) so it survives restarts. Stays
@@ -92,8 +92,8 @@ interviewAssistant.on('suggestion', (data: Suggestion) => {
   let target = [...sessionLog].reverse().find(
     e => !e.answer && ((e.original || '').trim() === q || (e.translated || '').trim() === q))
   if (!target) target = [...sessionLog].reverse().find(e => !e.answer)
-  if (target) target.answer = data.answer
-  else sessionLog.push({ original: data.original, translated: data.translated, answer: data.answer })
+  if (target) { target.answer = data.answer; target.qtype = data.type }
+  else sessionLog.push({ original: data.original, translated: data.translated, answer: data.answer, qtype: data.type })
 
   broadcast('suggestion:update', data)    // latest answer → overlay panel
   emitSession() // full history → history window

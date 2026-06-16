@@ -196,6 +196,21 @@ body {
   margin-bottom: 5px;
 }
 
+/* Question-type badge (overlay alert + history) */
+.qtype-badge {
+  margin-left: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  color: #fcd34d;
+  background: rgba(252,211,77,0.16);
+  vertical-align: middle;
+}
+.qa-q .qtype-badge { margin-left: auto; align-self: center; }
+
 .live-dot {
   position: absolute;
   top: 10px;

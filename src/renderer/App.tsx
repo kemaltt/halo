@@ -33,6 +33,19 @@ export interface KeyStatus {
 
 const EMPTY_KEY_STATUS: KeyStatus = { available: true, gemini: false, openai: false, anthropic: false }
 
+// Map the model's question-type enum to a short Turkish badge label.
+export function qTypeLabel(type?: string): string {
+  switch ((type || '').toLowerCase()) {
+    case 'behavioral':    return 'Davranışsal'
+    case 'technical':     return 'Teknik'
+    case 'system-design': return 'Sistem tasarımı'
+    case 'situational':   return 'Durumsal'
+    case 'background':    return 'Özgeçmiş'
+    case 'other':         return 'Diğer'
+    default:              return type || ''
+  }
+}
+
 function readSettings(): Settings {
   return {
     provider:      (localStorage.getItem('subtl_provider') as ProviderType) || 'gemini',
@@ -97,6 +110,7 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [suggestion, setSuggestion] = useState('')
   const [suggestionQuestion, setSuggestionQuestion] = useState('')
+  const [suggestionType, setSuggestionType] = useState('')
   const [suggesting, setSuggesting] = useState(false)
   const [keyStatus, setKeyStatus] = useState<KeyStatus>(EMPTY_KEY_STATUS)
   // Provider connection: '' idle, 'connected', 'reconnecting' (n), 'stalled'
@@ -143,11 +157,13 @@ export default function App() {
       setSuggesting(true)
       setSuggestion('')           // drop the prior answer so the panel shows "thinking"
       setSuggestionQuestion(q || '') // the utterance being answered
+      setSuggestionType('')
     })
     const unsubSuggest = window.subtl.onSuggestion?.((data) => {
       setSuggesting(false)
       setSuggestion(data.answer)
       setSuggestionQuestion(data.question || '')
+      setSuggestionType(data.type || '')
     })
 
     // Push current interview config to main on startup.
@@ -181,6 +197,7 @@ export default function App() {
     setTranslated('')
     setSuggestion('')   // clear the previous answer on (re)start
     setSuggestionQuestion('')
+    setSuggestionType('')
     setSuggesting(false)
 
     // Stage label so a failure tells us WHERE it broke (provider WS, audio
@@ -320,6 +337,7 @@ export default function App() {
       interviewMode={settings.interviewMode}
       suggestion={suggestion}
       suggestionQuestion={suggestionQuestion}
+      suggestionType={suggestionType}
       suggesting={suggesting}
       connState={connState}
       reconnectAttempt={reconnectAttempt}

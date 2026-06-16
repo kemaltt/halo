@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { AudioSource } from '../App'
+import { qTypeLabel } from '../App'
 
 interface Props {
   isRunning: boolean
@@ -11,6 +12,7 @@ interface Props {
   interviewMode: boolean
   suggestion: string
   suggestionQuestion: string
+  suggestionType: string
   suggesting: boolean
   connState: '' | 'connected' | 'reconnecting' | 'stalled'
   reconnectAttempt: number
@@ -23,7 +25,7 @@ interface Props {
 
 export default function OverlayView({
   isRunning, original, translated, error, settingsOpen, audioSource,
-  interviewMode, suggestion, suggestionQuestion, suggesting, connState, reconnectAttempt,
+  interviewMode, suggestion, suggestionQuestion, suggestionType, suggesting, connState, reconnectAttempt,
   onAnswerNow, onToggleSource, onStart, onStop, onToggleSettings
 }: Props) {
   const [isDragging, setIsDragging] = useState(false)
@@ -153,7 +155,10 @@ export default function OverlayView({
           the candidate, so its header is an explicit "this is for you" alert. */}
       {interviewMode && (suggesting || suggestion) && (
         <div className="suggestion-panel alert">
-          <div className="suggestion-label">🎯 Bu soru sana yöneltildi</div>
+          <div className="suggestion-label">
+            🎯 Bu soru sana yöneltildi
+            {suggestionType && <span className="qtype-badge">{qTypeLabel(suggestionType)}</span>}
+          </div>
           {suggestionQuestion && (
             <p className="suggestion-question">{suggestionQuestion}</p>
           )}

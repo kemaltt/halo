@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import type { SessionEntry } from '../env'
+import { qTypeLabel } from '../App'
 
 export default function SessionView() {
   const [entries, setEntries] = useState<SessionEntry[]>([])
@@ -93,6 +94,7 @@ export default function SessionView() {
             <div className="qa-q">
               <span className="qa-num">{i + 1}</span>
               <span className="qa-orig">{e.original || e.translated}</span>
+              {e.qtype && <span className="qtype-badge">{qTypeLabel(e.qtype)}</span>}
             </div>
             {e.original && e.translated && e.translated !== e.original && (
               <div className="qa-trans">{e.translated}</div>

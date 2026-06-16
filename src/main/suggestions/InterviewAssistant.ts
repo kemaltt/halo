@@ -26,6 +26,7 @@ export interface Suggestion {
   original: string
   translated: string
   answer: string
+  type?: string // question category (behavioral, technical, …)
 }
 
 interface Utterance {
@@ -37,6 +38,7 @@ interface Verdict {
   answer_needed: boolean
   question?: string
   answer?: string
+  question_type?: string // behavioral | technical | system-design | situational | background | other
 }
 
 /**
@@ -143,7 +145,8 @@ export class InterviewAssistant extends EventEmitter {
           question: verdict.question || u.original || u.translated,
           original: u.original,
           translated: u.translated,
-          answer: verdict.answer
+          answer: verdict.answer,
+          type: verdict.question_type
         } as Suggestion)
       }
     } catch (e: any) {
@@ -177,6 +180,7 @@ export class InterviewAssistant extends EventEmitter {
         `If no answer is needed, reply EXACTLY:\n{"answer_needed": false}\n\n` +
         `If an answer IS needed, reply:\n` +
         `{"answer_needed": true, "question": "<the question in its original language>", ` +
+        `"question_type": "<one of: behavioral | technical | system-design | situational | background | other>", ` +
         `"answer": "<a strong, specific first-person answer (\\"I …\\") the candidate ` +
         `can say aloud, 3-5 sentences, grounded in the CV, in the SAME language as the ` +
         `question>"}\n\n` +
@@ -329,7 +333,7 @@ export class InterviewAssistant extends EventEmitter {
    * then give an overall verdict — strengths, weaknesses, and what to improve.
    */
   async analyze(
-    entries: { original: string; translated: string; answer?: string; myAnswer?: string }[]
+    entries: { original: string; translated: string; answer?: string; myAnswer?: string; qtype?: string }[]
   ): Promise<string> {
     if (!this.client) throw new Error('Anthropic API key not set')
     const answered = entries.filter(e => e.myAnswer?.trim() || e.answer?.trim())
@@ -339,7 +343,7 @@ export class InterviewAssistant extends EventEmitter {
 
     const transcript = entries
       .map((e, i) => {
-        const q = `${i + 1}. Soru: ${e.original || e.translated}` +
+        const q = `${i + 1}. Soru${e.qtype ? ` [${e.qtype}]` : ''}: ${e.original || e.translated}` +
           (e.original && e.translated && e.original !== e.translated ? `  (çeviri: ${e.translated})` : '')
         const mine = e.myAnswer?.trim()
         const sugg = e.answer?.trim()
@@ -361,8 +365,11 @@ export class InterviewAssistant extends EventEmitter {
         `a suggested answer is shown only as reference — judge it more leniently and note it wasn't ` +
         `confirmed). Produce an honest, constructive debrief:\n` +
         `1. Per-question: a one-line verdict (✅ strong / ⚠️ okay / ❌ weak) + what was good and what ` +
-        `to improve, with a concrete better phrasing where useful.\n` +
-        `2. Overall: top strengths, main weaknesses/risks, and 3-5 concrete, prioritized action items ` +
+        `to improve, with a concrete better phrasing where useful. For behavioral questions, check ` +
+        `whether the answer follows STAR (Situation, Task, Action, Result).\n` +
+        `2. Communication: comment on filler words ("ee", "şey", "yani", "um", "like"), answer length ` +
+        `(too short / rambling), and clarity/structure — quote a couple of examples from the answers.\n` +
+        `3. Overall: top strengths, main weaknesses/risks, and 3-5 concrete, prioritized action items ` +
         `to prepare for next time.\n` +
         `Be specific and grounded in the CV; avoid generic filler. Use clear headings and short bullets. ` +
         `Reply in the language of the candidate's answers (Turkish if they are Turkish), otherwise English.\n\n` +
@@ -392,7 +399,8 @@ function parseVerdict(text: string): Verdict {
     return {
       answer_needed: !!parsed.answer_needed,
       question: typeof parsed.question === 'string' ? parsed.question : undefined,
-      answer: typeof parsed.answer === 'string' ? parsed.answer : undefined
+      answer: typeof parsed.answer === 'string' ? parsed.answer : undefined,
+      question_type: typeof parsed.question_type === 'string' ? parsed.question_type : undefined
     }
   } catch {
     return { answer_needed: false }
