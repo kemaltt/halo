@@ -6,6 +6,7 @@ export interface SessionEntry {
   answer?: string    // the AI-suggested answer (if any)
   myAnswer?: string  // the candidate's own/actual answer for this question
   qtype?: string     // question category (behavioral, technical, …)
+  speaker?: 'them' | 'me'  // who spoke this turn (speaker-labels mode)
 }
 
 export type SecretName = 'gemini' | 'openai' | 'anthropic'
@@ -43,7 +44,7 @@ export interface SubtlBridge {
   copyText: (text: string) => void
   enableLoopback: () => Promise<void>
   disableLoopback: () => Promise<void>
-  setInterviewConfig: (cfg: { enabled: boolean; cvText: string; glossary: string }) => Promise<void>
+  setInterviewConfig: (cfg: { enabled: boolean; cvText: string; glossary: string; speakerLabels: boolean }) => Promise<void>
   onSuggestion: (cb: (data: { question: string; answer: string; type?: string }) => void) => (() => void) | undefined
   onSuggestionThinking: (cb: (question: string) => void) => (() => void) | undefined
   answerNow: () => Promise<void>

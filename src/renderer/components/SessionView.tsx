@@ -90,9 +90,12 @@ export default function SessionView() {
         )}
 
         {entries.map((e, i) => (
-          <div className="qa-card" key={i}>
+          <div className={`qa-card ${e.speaker === 'me' ? 'me' : ''}`} key={i}>
             <div className="qa-q">
               <span className="qa-num">{i + 1}</span>
+              <span className={`speaker-tag ${e.speaker === 'me' ? 'me' : 'them'}`}>
+                {e.speaker === 'me' ? 'Sen' : 'Karşı taraf'}
+              </span>
               <span className="qa-orig">{e.original || e.translated}</span>
               {e.qtype && <span className="qtype-badge">{qTypeLabel(e.qtype)}</span>}
             </div>

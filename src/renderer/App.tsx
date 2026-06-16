@@ -19,6 +19,7 @@ export interface Settings {
   targetLang: string
   micDeviceId: string   // '' = system default input
   glossary: string      // user terms/names, one per line — context for AI steps
+  speakerLabels: boolean // also capture mic in system mode → "you vs them" transcript
   // Interview mode (Phase 4)
   interviewMode: boolean
   cvText: string
@@ -53,6 +54,7 @@ function readSettings(): Settings {
     targetLang:    localStorage.getItem('subtl_target_lang') || 'tr-TR',
     micDeviceId:   localStorage.getItem('subtl_mic_device') || '',
     glossary:      localStorage.getItem('subtl_glossary') || '',
+    speakerLabels: localStorage.getItem('subtl_speaker_labels') === '1',
     interviewMode: localStorage.getItem('subtl_interview_mode') === '1',
     cvText:        localStorage.getItem('subtl_cv_text') || ''
   }
@@ -62,7 +64,8 @@ function pushInterviewConfig(s: Settings): void {
   window.subtl.setInterviewConfig({
     enabled: s.interviewMode,
     cvText: s.cvText,
-    glossary: s.glossary
+    glossary: s.glossary,
+    speakerLabels: s.speakerLabels
   })
 }
 
@@ -246,10 +249,10 @@ export default function App() {
         workletRef.current = worklet
       }
 
-      // Interview + system: also capture the candidate's own voice (mic) into a
-      // separate transcription-only session. Non-fatal if the mic is unavailable
-      // — the meeting translation keeps working either way.
-      if (audioSource === 'system' && current.interviewMode) {
+      // System + (interview OR speaker-labels): also capture the candidate's own
+      // voice (mic) into a separate transcription-only session. Non-fatal if the
+      // mic is unavailable — the meeting translation keeps working either way.
+      if (audioSource === 'system' && (current.interviewMode || current.speakerLabels)) {
         try {
           const micStream = await getMicStream()
           const micCtx = new AudioContext({ sampleRate: 16000 })
@@ -313,6 +316,7 @@ export default function App() {
     localStorage.setItem('subtl_target_lang',    s.targetLang)
     localStorage.setItem('subtl_mic_device',     s.micDeviceId)
     localStorage.setItem('subtl_glossary',       s.glossary)
+    localStorage.setItem('subtl_speaker_labels', s.speakerLabels ? '1' : '0')
     localStorage.setItem('subtl_interview_mode', s.interviewMode ? '1' : '0')
     localStorage.setItem('subtl_cv_text',        s.cvText)
     pushInterviewConfig(s)

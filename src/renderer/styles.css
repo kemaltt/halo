@@ -539,6 +539,17 @@ body {
   align-items: baseline;
   margin-bottom: 6px;
 }
+.qa-card.me { border-color: rgba(56,189,248,0.3); background: rgba(56,189,248,0.06); }
+.speaker-tag {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 1px 7px;
+  border-radius: 999px;
+}
+.speaker-tag.them { color: #ffc56d; background: rgba(255,197,109,0.16); }
+.speaker-tag.me   { color: #7dd3fc; background: rgba(56,189,248,0.18); }
 .qa-num {
   font-size: 10px;
   font-weight: 700;

@@ -42,7 +42,7 @@ contextBridge.exposeInMainWorld('subtl', {
 
   // Interview mode (Phase 4) — Claude Haiku answer suggestions.
   // The Anthropic key is stored via setKey('anthropic', …), not here.
-  setInterviewConfig: (cfg: { enabled: boolean; cvText: string; glossary: string }) =>
+  setInterviewConfig: (cfg: { enabled: boolean; cvText: string; glossary: string; speakerLabels: boolean }) =>
     ipcRenderer.invoke('interview:config', cfg),
   onSuggestion: (cb: (data: { question: string; answer: string; type?: string }) => void) => {
     ipcRenderer.on('suggestion:update', (_e, data) => cb(data))

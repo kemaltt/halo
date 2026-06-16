@@ -27,7 +27,7 @@ let candidateStt: TranslationProvider | null = null
 
 // Conversation history — the source of truth, accumulates across stop/start.
 // Works in both modes: plain transcript turns, plus answers in interview mode.
-interface HistoryEntry { original: string; translated: string; answer?: string; myAnswer?: string; qtype?: string }
+interface HistoryEntry { original: string; translated: string; answer?: string; myAnswer?: string; qtype?: string; speaker?: 'them' | 'me' }
 let sessionLog: HistoryEntry[] = []
 
 // Persist the session log to disk (userData) so it survives restarts. Stays
@@ -62,7 +62,16 @@ function recordTurn(original: string, translated: string): void {
   if (!o && !t) return
   const last = sessionLog[sessionLog.length - 1]
   if (last && last.original === o && last.translated === t) return
-  sessionLog.push({ original: o, translated: t })
+  sessionLog.push({ original: o, translated: t, speaker: 'them' })
+  emitSession()
+}
+
+// A finalized candidate (mic) utterance as its OWN labeled entry — used in the
+// speaker-labels transcript mode (non-interview).
+function recordCandidateTurn(text: string): void {
+  const t = (text || '').trim()
+  if (!t) return
+  sessionLog.push({ original: t, translated: '', speaker: 'me' })
   emitSession()
 }
 
@@ -106,6 +115,7 @@ interviewAssistant.on('error', (msg: string) =>
 let interviewEnabled = false
 let interviewCv = ''
 let interviewGlossary = ''
+let speakerLabels = false // capture mic in non-interview system mode for "you vs them"
 function applyInterviewConfig(): void {
   interviewAssistant.setConfig({
     enabled: interviewEnabled,
@@ -292,14 +302,17 @@ ipcMain.handle('gemini:start', async (_, opts: { provider: ProviderType; sourceL
     }
   }
 
-  // Interview + system: also transcribe the candidate's mic (renderer streams it
-  // over audio:chunk-mic). Transcription-only — we read its `original` text and
-  // attach finalized utterances to the latest question as the candidate's answer.
-  if (interviewEnabled && opts.source === 'system') {
+  // Also transcribe the candidate's mic (renderer streams it over audio:chunk-mic)
+  // when interview mode OR speaker-labels is on, with a system source.
+  //   - interview: attach finalized utterances to the latest question (myAnswer).
+  //   - speaker-labels: record them as their own "me" entries in the transcript.
+  if ((interviewEnabled || speakerLabels) && opts.source === 'system') {
     try {
       candidateStt = createProvider(providerType)
       candidateStt.on('transcript', (d: { original: string; isFinal: boolean }) => {
-        if (d.isFinal) recordCandidateAnswer(d.original)
+        if (!d.isFinal) return
+        if (interviewEnabled) recordCandidateAnswer(d.original)
+        else recordCandidateTurn(d.original)
       })
       candidateStt.on('error', (m: string) => console.error('[candidate-stt]', m))
       await candidateStt.start({
@@ -337,10 +350,11 @@ ipcMain.on('audio:chunk-mic', (_event, chunk: Buffer) => {
 
 ipcMain.handle('overlay:hide', () => { overlayWindow?.hide() })
 ipcMain.handle('overlay:show', () => { overlayWindow?.show() })
-ipcMain.handle('interview:config', (_e, cfg: { enabled: boolean; cvText: string; glossary: string }) => {
+ipcMain.handle('interview:config', (_e, cfg: { enabled: boolean; cvText: string; glossary: string; speakerLabels?: boolean }) => {
   interviewEnabled = cfg.enabled
   interviewCv = cfg.cvText
   interviewGlossary = cfg.glossary || ''
+  speakerLabels = !!cfg.speakerLabels
   applyInterviewConfig()
 })
 

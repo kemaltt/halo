@@ -411,6 +411,25 @@ export default function SettingsView({ settings, keyStatus, onSave }: Props) {
           </div>
         </section>
 
+        {/* ── Speaker labels ── */}
+        <section className="settings-card">
+          <div className="field">
+            <label className="toggle-row">
+              <span>Konuşmacı etiketleri</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.speakerLabels}
+                className={`switch ${form.speakerLabels ? 'on' : ''}`}
+                onClick={() => set('speakerLabels', !form.speakerLabels)}
+              >
+                <span className="switch-knob" />
+              </button>
+            </label>
+            <p className="hint">Sistem sesi modunda mikrofonunu da dinler; geçmişte konuşmalar "Karşı taraf" ve "Sen" diye ayrılır. İki canlı oturum açar (≈2× API). Interview modunda zaten ayrıdır.</p>
+          </div>
+        </section>
+
         {/* ── Interview mode (Phase 4) ── */}
         <section className="settings-card accent">
         <div className="field">
