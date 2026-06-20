@@ -1,9 +1,13 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import { EventEmitter } from 'events'
 
-// CLAUDE.md hard rule: Claude is text-reasoning only (never in the audio→text
-// path). This sidecar runs ASYNC and must never block the translation stream.
-const MODEL = 'claude-haiku-4-5'
+// Interview suggestions run ASYNC and must never block the translation stream.
+// Text-reasoning only (never in the audio→text path). The user can pick which
+// model powers it: Claude Haiku (Anthropic) or Gemini Flash (Google).
+const CLAUDE_MODEL = 'claude-haiku-4-5'
+const GEMINI_MODEL = 'gemini-2.0-flash'
+const OPENAI_MODEL = 'gpt-4o-mini'
 
 // How long the interviewer must pause before we treat the accumulated speech as
 // a complete utterance worth evaluating. The Gemini live model has no reliable
@@ -14,8 +18,11 @@ const MIN_LEN = 8
 // How many recent interviewer turns to keep as context for the judge.
 const HISTORY_MAX = 6
 
+export type AssistantProvider = 'claude' | 'gemini' | 'openai'
+
 export interface InterviewConfig {
   enabled: boolean
+  provider: AssistantProvider
   apiKey: string
   cvText: string
   glossary?: string
@@ -49,9 +56,11 @@ interface Verdict {
  * are left alone, so the overlay stays quiet unless there's something to say.
  */
 export class InterviewAssistant extends EventEmitter {
-  private config: InterviewConfig = { enabled: false, apiKey: '', cvText: '' }
-  private client: Anthropic | null = null
-  private clientKey = ''
+  private config: InterviewConfig = { enabled: false, provider: 'claude', apiKey: '', cvText: '' }
+  private anthropic: Anthropic | null = null
+  private genai: GoogleGenerativeAI | null = null
+  private openaiKey = '' // OpenAI uses the REST API directly (no SDK)
+  private clientKey = '' // provider+key signature, to rebuild only on change
   private epoch = 0
 
   // Rolling state for the current/just-finished utterance.
@@ -69,14 +78,43 @@ export class InterviewAssistant extends EventEmitter {
 
   setConfig(cfg: InterviewConfig): void {
     this.config = cfg
-    if (cfg.apiKey && cfg.apiKey !== this.clientKey) {
-      this.client = new Anthropic({ apiKey: cfg.apiKey })
-      this.clientKey = cfg.apiKey
+    const sig = `${cfg.provider}:${cfg.apiKey}`
+    if (cfg.apiKey && sig !== this.clientKey) {
+      this.anthropic = cfg.provider === 'claude' ? new Anthropic({ apiKey: cfg.apiKey }) : null
+      this.genai = cfg.provider === 'gemini' ? new GoogleGenerativeAI(cfg.apiKey) : null
+      this.clientKey = sig
     }
     if (!cfg.apiKey) {
-      this.client = null
+      this.anthropic = null
+      this.genai = null
       this.clientKey = ''
     }
+  }
+
+  /** Whether the selected assistant provider has a usable client. */
+  private ready(): boolean {
+    return this.config.provider === 'gemini' ? !!this.genai : !!this.anthropic
+  }
+
+  /** Single text-generation entry point — dispatches to Claude or Gemini. */
+  private async generate(system: string, user: string, maxTokens: number, json = false): Promise<string> {
+    if (this.config.provider === 'gemini') {
+      if (!this.genai) throw new Error('Gemini anahtarı ayarlı değil')
+      const model = this.genai.getGenerativeModel({
+        model: GEMINI_MODEL,
+        systemInstruction: system,
+        generationConfig: { maxOutputTokens: maxTokens, ...(json ? { responseMimeType: 'application/json' } : {}) }
+      })
+      const res = await model.generateContent(user)
+      return (res.response.text() || '').trim()
+    }
+    if (!this.anthropic) throw new Error('Anthropic anahtarı ayarlı değil')
+    const resp = await this.anthropic.messages.create({
+      model: CLAUDE_MODEL, max_tokens: maxTokens, system, messages: [{ role: 'user', content: user }]
+    })
+    return resp.content
+      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+      .map(b => b.text).join('').trim()
   }
 
   reset(): void {
@@ -97,7 +135,7 @@ export class InterviewAssistant extends EventEmitter {
    * complete.
    */
   consider(original: string, translated: string, isFinal: boolean): void {
-    if (!this.config.enabled || !this.client) return
+    if (!this.config.enabled || !this.ready()) return
 
     this.latestOriginal = (original || '').trim()
     this.latestTranslated = (translated || '').trim()
@@ -159,50 +197,38 @@ export class InterviewAssistant extends EventEmitter {
     }
   }
 
-  /** One Haiku call: classify (is this for the candidate?) AND draft the answer. */
+  /** One call: classify (is this for the candidate?) AND draft the answer. */
   private async judge(u: Utterance): Promise<Verdict> {
     const context = this.history.length
       ? `Recent interviewer speech (oldest→newest):\n${this.history.join('\n')}\n\n`
       : ''
 
-    const resp = await this.client!.messages.create({
-      model: MODEL,
-      max_tokens: 700,
-      system:
-        `You assist a candidate during a LIVE job interview. You receive ONLY the ` +
-        `INTERVIEWER's transcribed speech (with a translation). Decide whether the ` +
-        `LATEST utterance is something the candidate is expected to answer out loud ` +
-        `right now — a genuine question or request directed at the candidate.\n\n` +
-        `Treat as NOT needing an answer: rhetorical questions, the interviewer ` +
-        `thinking aloud, restating or clarifying their own point, small talk, ` +
-        `transitions ("okay, let's see…"), or anything not actually asking the ` +
-        `candidate for information.\n\n` +
-        `If no answer is needed, reply EXACTLY:\n{"answer_needed": false}\n\n` +
-        `If an answer IS needed, reply:\n` +
-        `{"answer_needed": true, "question": "<the question in its original language>", ` +
-        `"question_type": "<one of: behavioral | technical | system-design | situational | background | other>", ` +
-        `"answer": "<a strong, specific first-person answer (\\"I …\\") the candidate ` +
-        `can say aloud, 3-5 sentences, grounded in the CV, in the SAME language as the ` +
-        `question>"}\n\n` +
-        `Output ONLY the JSON object. No prose, no code fences.\n\n` +
-        `Candidate CV:\n${this.config.cvText || '(no CV provided — give a strong generic answer)'}` +
-        this.glossaryBlock(),
-      messages: [{
-        role: 'user',
-        content:
-          `${context}Latest utterance:\n` +
-          `[original] ${u.original || '(none)'}\n` +
-          `[translation] ${u.translated || '(none)'}`
-      }]
-    })
+    const system =
+      `You assist a candidate during a LIVE job interview. You receive ONLY the ` +
+      `INTERVIEWER's transcribed speech (with a translation). Decide whether the ` +
+      `LATEST utterance is something the candidate is expected to answer out loud ` +
+      `right now — a genuine question or request directed at the candidate.\n\n` +
+      `Treat as NOT needing an answer: rhetorical questions, the interviewer ` +
+      `thinking aloud, restating or clarifying their own point, small talk, ` +
+      `transitions ("okay, let's see…"), or anything not actually asking the ` +
+      `candidate for information.\n\n` +
+      `If no answer is needed, reply EXACTLY:\n{"answer_needed": false}\n\n` +
+      `If an answer IS needed, reply:\n` +
+      `{"answer_needed": true, "question": "<the question in its original language>", ` +
+      `"question_type": "<one of: behavioral | technical | system-design | situational | background | other>", ` +
+      `"answer": "<a strong, specific first-person answer (\\"I …\\") the candidate ` +
+      `can say aloud, 3-5 sentences, grounded in the CV, in the SAME language as the ` +
+      `question>"}\n\n` +
+      `Output ONLY the JSON object. No prose, no code fences.\n\n` +
+      `Candidate CV:\n${this.config.cvText || '(no CV provided — give a strong generic answer)'}` +
+      this.glossaryBlock()
 
-    const text = resp.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map(b => b.text)
-      .join('')
-      .trim()
+    const user =
+      `${context}Latest utterance:\n` +
+      `[original] ${u.original || '(none)'}\n` +
+      `[translation] ${u.translated || '(none)'}`
 
-    return parseVerdict(text)
+    return parseVerdict(await this.generate(system, user, 700, true))
   }
 
   private pushHistory(turn: string): void {
@@ -226,8 +252,8 @@ export class InterviewAssistant extends EventEmitter {
    * quiet). User-initiated, so it takes priority and ignores the in-flight lock.
    */
   async forceAnswer(): Promise<void> {
-    if (!this.config.enabled || !this.client) {
-      this.emit('error', 'Interview modu kapalı ya da Anthropic anahtarı ayarlı değil.')
+    if (!this.config.enabled || !this.ready()) {
+      this.emit('error', 'Interview modu kapalı ya da asistan anahtarı ayarlı değil.')
       return
     }
     const u: Utterance = { original: this.latestOriginal, translated: this.latestTranslated }
@@ -260,35 +286,24 @@ export class InterviewAssistant extends EventEmitter {
     const context = this.history.length
       ? `Recent interviewer speech (oldest→newest):\n${this.history.join('\n')}\n\n`
       : ''
-    const resp = await this.client!.messages.create({
-      model: MODEL,
-      max_tokens: 700,
-      system:
-        `You are an interview coach. The candidate has asked you to draft an answer to the ` +
-        `interviewer's latest utterance — whether or not it is phrased as a direct question. ` +
-        `Using the CV, write a strong, specific first-person answer ("I …") the candidate can ` +
-        `say aloud: 3-5 sentences, grounded in the CV, in the SAME language as the utterance. ` +
-        `Output only the answer — no preamble, no quotes.\n\n` +
-        `Candidate CV:\n${this.config.cvText || '(no CV provided — give a strong generic answer)'}` +
-        this.glossaryBlock(),
-      messages: [{
-        role: 'user',
-        content:
-          `${context}Interviewer's latest utterance:\n` +
-          `[original] ${u.original || '(none)'}\n` +
-          `[translation] ${u.translated || '(none)'}`
-      }]
-    })
-    return resp.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map(b => b.text)
-      .join('')
-      .trim()
+    const system =
+      `You are an interview coach. The candidate has asked you to draft an answer to the ` +
+      `interviewer's latest utterance — whether or not it is phrased as a direct question. ` +
+      `Using the CV, write a strong, specific first-person answer ("I …") the candidate can ` +
+      `say aloud: 3-5 sentences, grounded in the CV, in the SAME language as the utterance. ` +
+      `Output only the answer — no preamble, no quotes.\n\n` +
+      `Candidate CV:\n${this.config.cvText || '(no CV provided — give a strong generic answer)'}` +
+      this.glossaryBlock()
+    const user =
+      `${context}Interviewer's latest utterance:\n` +
+      `[original] ${u.original || '(none)'}\n` +
+      `[translation] ${u.translated || '(none)'}`
+    return this.generate(system, user, 700)
   }
 
   /** Summarize the conversation/interview from the accumulated history log. */
   async summarize(entries: { original: string; translated: string; answer?: string }[]): Promise<string> {
-    if (!this.client) throw new Error('Anthropic API key not set')
+    if (!this.ready()) throw new Error('Asistan anahtarı ayarlı değil')
     if (entries.length === 0) return 'Nothing was captured in this session yet.'
 
     const hasAnswers = entries.some(e => e.answer)
@@ -313,18 +328,7 @@ export class InterviewAssistant extends EventEmitter {
         `points, decisions, and any action items or open questions. Use clear headings and short bullets. ` +
         `Reply in the translation's language if discernible, otherwise English.`
 
-    const resp = await this.client.messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      system: system + this.glossaryBlock(),
-      messages: [{ role: 'user', content: transcript }]
-    })
-
-    return resp.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map(b => b.text)
-      .join('')
-      .trim()
+    return this.generate(system + this.glossaryBlock(), transcript, 1024)
   }
 
   /**
@@ -335,7 +339,7 @@ export class InterviewAssistant extends EventEmitter {
   async analyze(
     entries: { original: string; translated: string; answer?: string; myAnswer?: string; qtype?: string }[]
   ): Promise<string> {
-    if (!this.client) throw new Error('Anthropic API key not set')
+    if (!this.ready()) throw new Error('Asistan anahtarı ayarlı değil')
     const answered = entries.filter(e => e.myAnswer?.trim() || e.answer?.trim())
     if (answered.length === 0) {
       return 'Henüz analiz edilecek cevap yok. Sorulara kendi cevabını gir (ya da önerilen cevabı kullan), sonra tekrar dene.'
@@ -356,33 +360,24 @@ export class InterviewAssistant extends EventEmitter {
       })
       .join('\n\n')
 
-    const resp = await this.client.messages.create({
-      model: MODEL,
-      max_tokens: 1600,
-      system:
-        `You are a senior interview coach reviewing a candidate's job interview. You are given ` +
-        `each question and the answer the CANDIDATE ACTUALLY GAVE (when their own answer is missing, ` +
-        `a suggested answer is shown only as reference — judge it more leniently and note it wasn't ` +
-        `confirmed). Produce an honest, constructive debrief:\n` +
-        `1. Per-question: a one-line verdict (✅ strong / ⚠️ okay / ❌ weak) + what was good and what ` +
-        `to improve, with a concrete better phrasing where useful. For behavioral questions, check ` +
-        `whether the answer follows STAR (Situation, Task, Action, Result).\n` +
-        `2. Communication: comment on filler words ("ee", "şey", "yani", "um", "like"), answer length ` +
-        `(too short / rambling), and clarity/structure — quote a couple of examples from the answers.\n` +
-        `3. Overall: top strengths, main weaknesses/risks, and 3-5 concrete, prioritized action items ` +
-        `to prepare for next time.\n` +
-        `Be specific and grounded in the CV; avoid generic filler. Use clear headings and short bullets. ` +
-        `Reply in the language of the candidate's answers (Turkish if they are Turkish), otherwise English.\n\n` +
-        `Candidate CV:\n${this.config.cvText || '(no CV provided)'}` +
-        this.glossaryBlock(),
-      messages: [{ role: 'user', content: transcript }]
-    })
+    const system =
+      `You are a senior interview coach reviewing a candidate's job interview. You are given ` +
+      `each question and the answer the CANDIDATE ACTUALLY GAVE (when their own answer is missing, ` +
+      `a suggested answer is shown only as reference — judge it more leniently and note it wasn't ` +
+      `confirmed). Produce an honest, constructive debrief:\n` +
+      `1. Per-question: a one-line verdict (✅ strong / ⚠️ okay / ❌ weak) + what was good and what ` +
+      `to improve, with a concrete better phrasing where useful. For behavioral questions, check ` +
+      `whether the answer follows STAR (Situation, Task, Action, Result).\n` +
+      `2. Communication: comment on filler words ("ee", "şey", "yani", "um", "like"), answer length ` +
+      `(too short / rambling), and clarity/structure — quote a couple of examples from the answers.\n` +
+      `3. Overall: top strengths, main weaknesses/risks, and 3-5 concrete, prioritized action items ` +
+      `to prepare for next time.\n` +
+      `Be specific and grounded in the CV; avoid generic filler. Use clear headings and short bullets. ` +
+      `Reply in the language of the candidate's answers (Turkish if they are Turkish), otherwise English.\n\n` +
+      `Candidate CV:\n${this.config.cvText || '(no CV provided)'}` +
+      this.glossaryBlock()
 
-    return resp.content
-      .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-      .map(b => b.text)
-      .join('')
-      .trim()
+    return this.generate(system, transcript, 1600)
   }
 }
 

@@ -445,23 +445,51 @@ export default function SettingsView({ settings, keyStatus, onSave }: Props) {
               <span className="switch-knob" />
             </button>
           </label>
-          <p className="hint">Detects the interviewer's questions and suggests answers (Claude Haiku, async).</p>
+          <p className="hint">Detects the interviewer's questions and suggests answers (async).</p>
         </div>
 
         {form.interviewMode && (
           <>
-            <ApiKeyField
-              label="Anthropic API Key"
-              name="anthropic"
-              isSet={status.anthropic}
-              value={anthropicKey}
-              placeholder="sk-ant-..."
-              helpHref="https://console.anthropic.com/settings/keys"
-              helpLabel="console.anthropic.com"
-              editing={editingAnthropic}
-              onChange={setAnthropicKey}
-              onEdit={() => setEditingAnthropic(true)}
-            />
+            <div className="field">
+              <label>Asistan modeli</label>
+              <div className="provider-tabs">
+                {(['claude', 'gemini'] as const).map(p => (
+                  <button
+                    key={p}
+                    className={`provider-tab ${form.assistantProvider === p ? 'active' : ''}`}
+                    onClick={() => set('assistantProvider', p)}
+                  >
+                    {p === 'claude' ? '✦ Claude Haiku' : '◆ Gemini Flash'}
+                  </button>
+                ))}
+              </div>
+              <p className="hint">
+                {form.assistantProvider === 'claude'
+                  ? 'Anthropic Claude Haiku — ayrı bir Anthropic anahtarı gerekir.'
+                  : 'Google Gemini Flash — çeviri için girdiğin Gemini anahtarı kullanılır, ayrı anahtar gerekmez.'}
+              </p>
+            </div>
+
+            {form.assistantProvider === 'claude' ? (
+              <ApiKeyField
+                label="Anthropic API Key"
+                name="anthropic"
+                isSet={status.anthropic}
+                value={anthropicKey}
+                placeholder="sk-ant-..."
+                helpHref="https://console.anthropic.com/settings/keys"
+                helpLabel="console.anthropic.com"
+                editing={editingAnthropic}
+                onChange={setAnthropicKey}
+                onEdit={() => setEditingAnthropic(true)}
+              />
+            ) : (
+              !status.gemini && (
+                <p className="error-text">
+                  Gemini anahtarı ayarlı değil — yukarıdaki Provider bölümünden Gemini anahtarını gir.
+                </p>
+              )
+            )}
 
             <div className="field">
               <label>CV / Skills</label>

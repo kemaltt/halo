@@ -23,6 +23,7 @@ export interface Settings {
   ephemeral: boolean     // don't persist the transcript to disk
   // Interview mode (Phase 4)
   interviewMode: boolean
+  assistantProvider: 'claude' | 'gemini' // which model powers interview suggestions
   cvText: string
 }
 
@@ -58,6 +59,7 @@ function readSettings(): Settings {
     speakerLabels: localStorage.getItem('subtl_speaker_labels') === '1',
     ephemeral:     localStorage.getItem('subtl_ephemeral') === '1',
     interviewMode: localStorage.getItem('subtl_interview_mode') === '1',
+    assistantProvider: (localStorage.getItem('subtl_assistant_provider') as 'claude' | 'gemini') || 'claude',
     cvText:        localStorage.getItem('subtl_cv_text') || ''
   }
 }
@@ -65,6 +67,7 @@ function readSettings(): Settings {
 function pushInterviewConfig(s: Settings): void {
   window.subtl.setInterviewConfig({
     enabled: s.interviewMode,
+    provider: s.assistantProvider,
     cvText: s.cvText,
     glossary: s.glossary,
     speakerLabels: s.speakerLabels,
@@ -322,6 +325,7 @@ export default function App() {
     localStorage.setItem('subtl_speaker_labels', s.speakerLabels ? '1' : '0')
     localStorage.setItem('subtl_ephemeral',      s.ephemeral ? '1' : '0')
     localStorage.setItem('subtl_interview_mode', s.interviewMode ? '1' : '0')
+    localStorage.setItem('subtl_assistant_provider', s.assistantProvider)
     localStorage.setItem('subtl_cv_text',        s.cvText)
     pushInterviewConfig(s)
   }

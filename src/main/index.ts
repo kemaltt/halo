@@ -122,10 +122,15 @@ let interviewEnabled = false
 let interviewCv = ''
 let interviewGlossary = ''
 let speakerLabels = false // capture mic in non-interview system mode for "you vs them"
+let assistantProvider: 'claude' | 'gemini' = 'claude'
 function applyInterviewConfig(): void {
+  // The assistant uses the key for its provider: Anthropic for Claude, the same
+  // Gemini key as translation for Gemini.
+  const apiKey = getSecret(assistantProvider === 'gemini' ? 'gemini' : 'anthropic')
   interviewAssistant.setConfig({
     enabled: interviewEnabled,
-    apiKey: getSecret('anthropic'),
+    provider: assistantProvider,
+    apiKey,
     cvText: interviewCv,
     glossary: interviewGlossary
   })
@@ -356,8 +361,9 @@ ipcMain.on('audio:chunk-mic', (_event, chunk: Buffer) => {
 
 ipcMain.handle('overlay:hide', () => { overlayWindow?.hide() })
 ipcMain.handle('overlay:show', () => { overlayWindow?.show() })
-ipcMain.handle('interview:config', (_e, cfg: { enabled: boolean; cvText: string; glossary: string; speakerLabels?: boolean; ephemeral?: boolean }) => {
+ipcMain.handle('interview:config', (_e, cfg: { enabled: boolean; provider?: 'claude' | 'gemini'; cvText: string; glossary: string; speakerLabels?: boolean; ephemeral?: boolean }) => {
   interviewEnabled = cfg.enabled
+  assistantProvider = cfg.provider === 'gemini' ? 'gemini' : 'claude'
   interviewCv = cfg.cvText
   interviewGlossary = cfg.glossary || ''
   speakerLabels = !!cfg.speakerLabels
@@ -389,7 +395,7 @@ ipcMain.handle('secrets:get', (_e, name: SecretName) => getSecret(name))
 ipcMain.handle('secrets:set', (_e, name: SecretName, value: string) => {
   try {
     setSecret(name, value)
-    if (name === 'anthropic') applyInterviewConfig()
+    if (name === 'anthropic' || name === 'gemini') applyInterviewConfig()
     return { ok: true, ...secretStatus() }
   } catch (e: any) {
     return { ok: false, error: e?.message || 'Failed to store key' }
