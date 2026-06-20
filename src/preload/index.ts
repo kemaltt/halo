@@ -77,6 +77,7 @@ contextBridge.exposeInMainWorld('subtl', {
   },
 
   // Interview session window + log
+  closeSession: () => ipcRenderer.invoke('session:close'),
   openSession: () => ipcRenderer.invoke('session:open'),
   getSession: () => ipcRenderer.invoke('session:list'),
   clearSession: () => ipcRenderer.invoke('session:clear'),

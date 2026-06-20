@@ -10,7 +10,21 @@ export default function SessionView() {
   const [analysis, setAnalysis] = useState('')
   const [analyzing, setAnalyzing] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const [opacity, setOpacity] = useState(() => Number(localStorage.getItem('subtl_session_opacity')) || 100)
   const [error, setError] = useState('')
+
+  // Background-only transparency: set a CSS alpha so the desktop shows through
+  // the panel while text stays fully opaque (unlike window-level opacity).
+  const applyOpacity = (v: number) =>
+    document.documentElement.style.setProperty('--halo-session-alpha', String(v / 100))
+
+  useEffect(() => { applyOpacity(opacity) }, [])
+
+  const changeOpacity = (v: number) => {
+    setOpacity(v)
+    localStorage.setItem('subtl_session_opacity', String(v))
+    applyOpacity(v)
+  }
   const bottomRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -80,6 +94,17 @@ export default function SessionView() {
         <span className="settings-logo">halo</span>
         <h1>Geçmiş</h1>
         <span className="session-count">{entries.length} kayıt</span>
+        <div className="opacity-control" title="Zemin saydamlığı">
+          <span>◐</span>
+          <input
+            type="range"
+            min={20}
+            max={100}
+            value={opacity}
+            onChange={e => changeOpacity(Number(e.target.value))}
+          />
+        </div>
+        <button className="session-close" title="Kapat" onClick={() => window.subtl.closeSession()}>✕</button>
       </div>
 
       <div className="session-body">

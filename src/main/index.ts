@@ -223,7 +223,12 @@ function createSessionWindow(): void {
     minWidth: 480,
     minHeight: 560,
     title: 'Halo — Session',
-    backgroundColor: '#0f0f13',
+    // Transparent + frameless so the user-set background alpha shows the desktop
+    // while text stays fully opaque (CSS controls the bg alpha, not window opacity).
+    transparent: true,
+    frame: false,
+    hasShadow: false,
+    resizable: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -407,6 +412,7 @@ ipcMain.handle('secrets:set', (_e, name: SecretName, value: string) => {
 // Manual "answer now" — force a suggestion for the latest utterance.
 ipcMain.handle('interview:answer-now', () => { void interviewAssistant.forceAnswer() })
 
+ipcMain.handle('session:close', () => { sessionWindow?.close() })
 ipcMain.handle('session:open', () => { createSessionWindow() })
 ipcMain.handle('session:list', () => sessionLog)
 ipcMain.handle('session:clear', () => {

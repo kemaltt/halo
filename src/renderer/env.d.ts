@@ -54,6 +54,7 @@ export interface SubtlBridge {
     cb: (s: { state: 'connected' | 'disconnected' | 'reconnecting' | 'stalled'; attempt?: number }) => void
   ) => (() => void) | undefined
 
+  closeSession: () => Promise<void>
   openSession: () => Promise<void>
   getSession: () => Promise<SessionEntry[]>
   clearSession: () => Promise<void>
