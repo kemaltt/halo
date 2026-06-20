@@ -486,6 +486,45 @@ export default function SettingsView({ settings, keyStatus, onSave }: Props) {
         )}
         </section>
 
+        {/* ── Privacy & data ── */}
+        <section className="settings-card">
+          <div className="field">
+            <label className="toggle-row">
+              <span>Transkripti diske kaydetme</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={form.ephemeral}
+                className={`switch ${form.ephemeral ? 'on' : ''}`}
+                onClick={() => set('ephemeral', !form.ephemeral)}
+              >
+                <span className="switch-knob" />
+              </button>
+            </label>
+            <p className="hint">
+              Açıkken oturum geçmişi diske yazılmaz (uygulama kapanınca kaybolur). Açtığın anda mevcut kayıt da silinir.
+            </p>
+          </div>
+
+          <div className="field">
+            <button
+              type="button"
+              className="btn-ghost danger"
+              onClick={async () => {
+                if (confirm('Tüm oturum/transkript verisi silinsin mi? Bu geri alınamaz.')) {
+                  await window.subtl.purgeData()
+                }
+              }}
+            >
+              Tüm verileri sil
+            </button>
+            <p className="hint">
+              🔒 Anahtarların macOS Keychain'de şifreli, transkriptler yalnızca bu cihazda tutulur — buluta gönderilmez, toplanmaz.
+              Çeviri için ses yalnızca seçtiğin sağlayıcıya (kendi anahtarınla) gider.
+            </p>
+          </div>
+        </section>
+
         {/* ── Shortcut ── */}
         <section className="settings-card">
         <div className="field">

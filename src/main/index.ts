@@ -1,6 +1,6 @@
 import { app, BrowserWindow, ipcMain, globalShortcut, screen, session, systemPreferences, dialog } from 'electron'
 import { join } from 'path'
-import { readFileSync, writeFileSync, existsSync } from 'fs'
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
 import { initMain as initLoopbackAudio } from 'electron-audio-loopback'
 import type { TranslationProvider, ProviderType } from './providers/TranslationProvider'
@@ -39,9 +39,15 @@ function loadSession(): void {
     if (existsSync(f)) sessionLog = JSON.parse(readFileSync(f, 'utf8')) as HistoryEntry[]
   } catch (e) { console.error('[session] load failed:', e) }
 }
+let ephemeral = false // when true, never write the transcript to disk
 function persistSession(): void {
+  if (ephemeral) return
   try { writeFileSync(sessionFile(), JSON.stringify(sessionLog), { mode: 0o600 }) }
   catch (e) { console.error('[session] write failed:', e) }
+}
+function deleteSessionFile(): void {
+  try { if (existsSync(sessionFile())) unlinkSync(sessionFile()) }
+  catch (e) { console.error('[session] delete failed:', e) }
 }
 
 function broadcast(channel: string, payload?: unknown): void {
@@ -350,12 +356,25 @@ ipcMain.on('audio:chunk-mic', (_event, chunk: Buffer) => {
 
 ipcMain.handle('overlay:hide', () => { overlayWindow?.hide() })
 ipcMain.handle('overlay:show', () => { overlayWindow?.show() })
-ipcMain.handle('interview:config', (_e, cfg: { enabled: boolean; cvText: string; glossary: string; speakerLabels?: boolean }) => {
+ipcMain.handle('interview:config', (_e, cfg: { enabled: boolean; cvText: string; glossary: string; speakerLabels?: boolean; ephemeral?: boolean }) => {
   interviewEnabled = cfg.enabled
   interviewCv = cfg.cvText
   interviewGlossary = cfg.glossary || ''
   speakerLabels = !!cfg.speakerLabels
+  const wasEphemeral = ephemeral
+  ephemeral = !!cfg.ephemeral
+  // Turning ephemeral ON: wipe what's already on disk so nothing lingers.
+  if (ephemeral && !wasEphemeral) deleteSessionFile()
   applyInterviewConfig()
+})
+
+// "Delete all data" — clear the in-memory log and remove the on-disk file.
+ipcMain.handle('data:purge', () => {
+  sessionLog = []
+  interviewAssistant.reset()
+  deleteSessionFile()
+  broadcast('session:update', sessionLog)
+  return { ok: true }
 })
 
 // ── Secrets (API keys, encrypted at rest via OS keychain) ────────

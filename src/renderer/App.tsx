@@ -20,6 +20,7 @@ export interface Settings {
   micDeviceId: string   // '' = system default input
   glossary: string      // user terms/names, one per line — context for AI steps
   speakerLabels: boolean // also capture mic in system mode → "you vs them" transcript
+  ephemeral: boolean     // don't persist the transcript to disk
   // Interview mode (Phase 4)
   interviewMode: boolean
   cvText: string
@@ -55,6 +56,7 @@ function readSettings(): Settings {
     micDeviceId:   localStorage.getItem('subtl_mic_device') || '',
     glossary:      localStorage.getItem('subtl_glossary') || '',
     speakerLabels: localStorage.getItem('subtl_speaker_labels') === '1',
+    ephemeral:     localStorage.getItem('subtl_ephemeral') === '1',
     interviewMode: localStorage.getItem('subtl_interview_mode') === '1',
     cvText:        localStorage.getItem('subtl_cv_text') || ''
   }
@@ -65,7 +67,8 @@ function pushInterviewConfig(s: Settings): void {
     enabled: s.interviewMode,
     cvText: s.cvText,
     glossary: s.glossary,
-    speakerLabels: s.speakerLabels
+    speakerLabels: s.speakerLabels,
+    ephemeral: s.ephemeral
   })
 }
 
@@ -317,6 +320,7 @@ export default function App() {
     localStorage.setItem('subtl_mic_device',     s.micDeviceId)
     localStorage.setItem('subtl_glossary',       s.glossary)
     localStorage.setItem('subtl_speaker_labels', s.speakerLabels ? '1' : '0')
+    localStorage.setItem('subtl_ephemeral',      s.ephemeral ? '1' : '0')
     localStorage.setItem('subtl_interview_mode', s.interviewMode ? '1' : '0')
     localStorage.setItem('subtl_cv_text',        s.cvText)
     pushInterviewConfig(s)

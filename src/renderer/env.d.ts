@@ -44,7 +44,8 @@ export interface SubtlBridge {
   copyText: (text: string) => void
   enableLoopback: () => Promise<void>
   disableLoopback: () => Promise<void>
-  setInterviewConfig: (cfg: { enabled: boolean; cvText: string; glossary: string; speakerLabels: boolean }) => Promise<void>
+  setInterviewConfig: (cfg: { enabled: boolean; cvText: string; glossary: string; speakerLabels: boolean; ephemeral: boolean }) => Promise<void>
+  purgeData: () => Promise<{ ok: boolean }>
   onSuggestion: (cb: (data: { question: string; answer: string; type?: string }) => void) => (() => void) | undefined
   onSuggestionThinking: (cb: (question: string) => void) => (() => void) | undefined
   answerNow: () => Promise<void>
