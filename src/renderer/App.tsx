@@ -23,7 +23,7 @@ export interface Settings {
   ephemeral: boolean     // don't persist the transcript to disk
   // Interview mode (Phase 4)
   interviewMode: boolean
-  assistantProvider: 'claude' | 'gemini' // which model powers interview suggestions
+  assistantProvider: 'claude' | 'gemini' | 'openai' // which model powers interview suggestions
   cvText: string
 }
 
@@ -59,7 +59,7 @@ function readSettings(): Settings {
     speakerLabels: localStorage.getItem('subtl_speaker_labels') === '1',
     ephemeral:     localStorage.getItem('subtl_ephemeral') === '1',
     interviewMode: localStorage.getItem('subtl_interview_mode') === '1',
-    assistantProvider: (localStorage.getItem('subtl_assistant_provider') as 'claude' | 'gemini') || 'claude',
+    assistantProvider: (localStorage.getItem('subtl_assistant_provider') as 'claude' | 'gemini' | 'openai') || 'claude',
     cvText:        localStorage.getItem('subtl_cv_text') || ''
   }
 }

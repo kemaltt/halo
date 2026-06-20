@@ -15,7 +15,14 @@ detected questions.
 
 ## Status
 Phases 1–5 substantially implemented (mic + system audio, dual transcript, interview
-mode, polish). macOS-only; Windows (Phase 6) not started.
+mode, polish). macOS-only; Windows scaffolding present (OS-branched capture) but untested.
+
+**Recent additions:** session history persisted to `userData/halo-session.json` + `.md/.txt`
+export; mic device picker + live level/test; custom (non-native) dropdowns; user **glossary**
+fed to all AI text steps; interview **question-type** badge + coaching analysis (STAR/filler/
+length); **speaker labels** ("Sen" vs "Karşı taraf", opt-in dual capture); **privacy** card
+(ephemeral no-disk mode, "delete all data"); centralized **API Keys** card; multi-provider
+interview assistant (Claude/Gemini/OpenAI).
 
 ## Critical metric
 **Latency.** Every architectural choice favors lower latency on the translation path.
@@ -33,11 +40,11 @@ mode, polish). macOS-only; Windows (Phase 6) not started.
   - **Fallback (still wired, unused):** `electron-audio-loopback`.
 - **STT + translation:** Gemini 3.5 Live Translate (`gemini-3.5-live-translate-preview`) over WebSocket. Single session yields **both input (original) and output (translated) transcripts**.
   - Swappable alternative: OpenAI realtime (`gpt-4o-realtime-preview` + Whisper) behind the same interface.
-- **Interview answer suggestions:** Claude Haiku 4.5, async, CV as context string.
+- **Interview answer suggestions (text-reasoning, user-pickable provider):** Claude Haiku 4.5 / Gemini 2.0 Flash / OpenAI gpt-4o-mini, async, CV + glossary as context. Selected in Settings; uses that provider's key. Single `InterviewAssistant.generate()` dispatches to the three (Anthropic SDK / Google SDK / OpenAI REST via fetch).
 
 ## Hard rule — model roles
-- Claude has **no audio input / no realtime STT**. It must **never** be placed in the audio→text path. Claude is text-reasoning only (interview suggestions).
-- Audio/translation layer = Gemini **or** OpenAI. Put a provider abstraction behind an interface so they're swappable.
+- **No model is hardcoded into the audio→text path except a realtime speech model.** Translation/STT layer = Gemini Live **or** OpenAI Realtime (provider abstraction). Claude has no audio input / no realtime STT, so it can NEVER be a translation provider — this was requested and declined.
+- **Interview suggestions are text-only** and may run on Claude, Gemini, or OpenAI (user choice). Text-reasoning only; never in the audio→text path.
 
 ---
 

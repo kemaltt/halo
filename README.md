@@ -24,12 +24,15 @@ coaching analysis.
 - **Two audio sources** — your **mic** (own voice) or **system audio** (the other participant, via Core Audio taps — no screen-recording permission).
 - **Auto / manual language** — source auto-detects; manual selection improves accuracy.
 - **Interview mode**
-  - An AI judge (Claude Haiku) decides whether the latest utterance is a real question *for you* and drafts an answer — staying silent on rhetorical/thinking-aloud speech.
-  - **🎯 "Bu soru sana yöneltildi"** alert + suggested answer in the overlay.
+  - An AI judge decides whether the latest utterance is a real question *for you* and drafts an answer — staying silent on rhetorical/thinking-aloud speech. **Pick the model:** Claude Haiku, Gemini Flash, or OpenAI gpt-4o-mini.
+  - **🎯 "Bu soru sana yöneltildi"** alert + a **question-type** badge (behavioral/technical/…) + suggested answer in the overlay.
   - Manual override: force an answer for the latest utterance (`⌘⇧A`).
-  - Captures **your own spoken answers** (separate mic transcription) and runs an **Analyze** pass — per-question ✅/⚠️/❌ feedback + overall strengths, gaps, and action items.
+  - Captures **your own spoken answers** (separate mic transcription) and runs an **Analyze** pass — per-question ✅/⚠️/❌ feedback, STAR/filler/length coaching, plus overall strengths, gaps, and action items.
+- **Session history** — persisted locally, with speaker labels ("Sen" vs "Karşı taraf"), export to `.md`/`.txt`, and **Summary**/**Analyze**.
+- **Custom glossary** — your names/jargon fed to all AI text steps for correct spelling.
+- **Mic picker + level test** — choose your input device and verify it before starting (no API cost).
 - **Resilient streams** — WebSocket reconnect with exponential backoff + "stalled" indicator.
-- **Secure keys** — your API keys are encrypted at rest in the macOS Keychain (`safeStorage`), never in the repo or `localStorage`.
+- **Privacy-first** — keys encrypted in the macOS Keychain (`safeStorage`); transcripts local-only with an **ephemeral** (no-disk) mode and **delete-all-data**; audio goes only to the provider you chose, with your own key.
 
 ---
 

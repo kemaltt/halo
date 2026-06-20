@@ -333,10 +333,18 @@ export default function SettingsView({ settings, keyStatus, onSave }: Props) {
               ? 'gemini-3.5-live-translate-preview — single session, lowest latency.'
               : 'gpt-4o-realtime-preview + Whisper STT — proven quality.'}
           </p>
+          {form.provider === 'gemini' && !status.gemini && (
+            <p className="error-text">Gemini anahtarı ayarlı değil — aşağıdaki API Anahtarları bölümünden gir.</p>
+          )}
+          {form.provider === 'openai' && !status.openai && (
+            <p className="error-text">OpenAI anahtarı ayarlı değil — aşağıdaki API Anahtarları bölümünden gir.</p>
+          )}
         </div>
+        </section>
 
-        {/* ── API Key (encrypted at rest; locked when saved) ── */}
-        {form.provider === 'gemini' && (
+        {/* ── API keys (central; encrypted at rest) ── */}
+        <section className="settings-card">
+          <div className="field"><label>API Anahtarları</label></div>
           <ApiKeyField
             label="Gemini API Key"
             name="gemini"
@@ -349,9 +357,6 @@ export default function SettingsView({ settings, keyStatus, onSave }: Props) {
             onChange={setGeminiKey}
             onEdit={() => setEditingGemini(true)}
           />
-        )}
-
-        {form.provider === 'openai' && (
           <ApiKeyField
             label="OpenAI API Key"
             name="openai"
@@ -364,7 +369,18 @@ export default function SettingsView({ settings, keyStatus, onSave }: Props) {
             onChange={setOpenaiKey}
             onEdit={() => setEditingOpenai(true)}
           />
-        )}
+          <ApiKeyField
+            label="Anthropic API Key"
+            name="anthropic"
+            isSet={status.anthropic}
+            value={anthropicKey}
+            placeholder="sk-ant-..."
+            helpHref="https://console.anthropic.com/settings/keys"
+            helpLabel="console.anthropic.com"
+            editing={editingAnthropic}
+            onChange={setAnthropicKey}
+            onEdit={() => setEditingAnthropic(true)}
+          />
         </section>
 
         {/* ── Languages ── */}
@@ -453,43 +469,32 @@ export default function SettingsView({ settings, keyStatus, onSave }: Props) {
             <div className="field">
               <label>Asistan modeli</label>
               <div className="provider-tabs">
-                {(['claude', 'gemini'] as const).map(p => (
+                {(['claude', 'gemini', 'openai'] as const).map(p => (
                   <button
                     key={p}
                     className={`provider-tab ${form.assistantProvider === p ? 'active' : ''}`}
                     onClick={() => set('assistantProvider', p)}
                   >
-                    {p === 'claude' ? '✦ Claude Haiku' : '◆ Gemini Flash'}
+                    {p === 'claude' ? '✦ Claude' : p === 'gemini' ? '◆ Gemini' : '◈ OpenAI'}
                   </button>
                 ))}
               </div>
               <p className="hint">
                 {form.assistantProvider === 'claude'
-                  ? 'Anthropic Claude Haiku — ayrı bir Anthropic anahtarı gerekir.'
-                  : 'Google Gemini Flash — çeviri için girdiğin Gemini anahtarı kullanılır, ayrı anahtar gerekmez.'}
+                  ? 'Anthropic Claude Haiku.'
+                  : form.assistantProvider === 'gemini'
+                    ? 'Google Gemini Flash — çeviri Gemini anahtarını kullanır.'
+                    : 'OpenAI GPT-4o mini — çeviri OpenAI anahtarını kullanır.'}
+                {' '}Anahtarları API Anahtarları bölümünden yönet.
               </p>
-            </div>
-
-            {form.assistantProvider === 'claude' ? (
-              <ApiKeyField
-                label="Anthropic API Key"
-                name="anthropic"
-                isSet={status.anthropic}
-                value={anthropicKey}
-                placeholder="sk-ant-..."
-                helpHref="https://console.anthropic.com/settings/keys"
-                helpLabel="console.anthropic.com"
-                editing={editingAnthropic}
-                onChange={setAnthropicKey}
-                onEdit={() => setEditingAnthropic(true)}
-              />
-            ) : (
-              !status.gemini && (
+              {((form.assistantProvider === 'claude' && !status.anthropic) ||
+                (form.assistantProvider === 'gemini' && !status.gemini) ||
+                (form.assistantProvider === 'openai' && !status.openai)) && (
                 <p className="error-text">
-                  Gemini anahtarı ayarlı değil — yukarıdaki Provider bölümünden Gemini anahtarını gir.
+                  Seçili asistanın anahtarı ayarlı değil — API Anahtarları bölümünden gir.
                 </p>
-              )
-            )}
+              )}
+            </div>
 
             <div className="field">
               <label>CV / Skills</label>

@@ -82,21 +82,27 @@ export class InterviewAssistant extends EventEmitter {
     if (cfg.apiKey && sig !== this.clientKey) {
       this.anthropic = cfg.provider === 'claude' ? new Anthropic({ apiKey: cfg.apiKey }) : null
       this.genai = cfg.provider === 'gemini' ? new GoogleGenerativeAI(cfg.apiKey) : null
+      this.openaiKey = cfg.provider === 'openai' ? cfg.apiKey : ''
       this.clientKey = sig
     }
     if (!cfg.apiKey) {
       this.anthropic = null
       this.genai = null
+      this.openaiKey = ''
       this.clientKey = ''
     }
   }
 
   /** Whether the selected assistant provider has a usable client. */
   private ready(): boolean {
-    return this.config.provider === 'gemini' ? !!this.genai : !!this.anthropic
+    switch (this.config.provider) {
+      case 'gemini': return !!this.genai
+      case 'openai': return !!this.openaiKey
+      default:       return !!this.anthropic
+    }
   }
 
-  /** Single text-generation entry point — dispatches to Claude or Gemini. */
+  /** Single text-generation entry point — dispatches to Claude / Gemini / OpenAI. */
   private async generate(system: string, user: string, maxTokens: number, json = false): Promise<string> {
     if (this.config.provider === 'gemini') {
       if (!this.genai) throw new Error('Gemini anahtarı ayarlı değil')
@@ -107,6 +113,22 @@ export class InterviewAssistant extends EventEmitter {
       })
       const res = await model.generateContent(user)
       return (res.response.text() || '').trim()
+    }
+    if (this.config.provider === 'openai') {
+      if (!this.openaiKey) throw new Error('OpenAI anahtarı ayarlı değil')
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.openaiKey}` },
+        body: JSON.stringify({
+          model: OPENAI_MODEL,
+          max_tokens: maxTokens,
+          messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+          ...(json ? { response_format: { type: 'json_object' } } : {})
+        })
+      })
+      if (!res.ok) throw new Error(`OpenAI ${res.status}: ${(await res.text()).slice(0, 200)}`)
+      const data: any = await res.json()
+      return (data?.choices?.[0]?.message?.content || '').trim()
     }
     if (!this.anthropic) throw new Error('Anthropic anahtarı ayarlı değil')
     const resp = await this.anthropic.messages.create({
