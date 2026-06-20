@@ -21,6 +21,11 @@ export interface Settings {
   glossary: string      // user terms/names, one per line — context for AI steps
   speakerLabels: boolean // also capture mic in system mode → "you vs them" transcript
   ephemeral: boolean     // don't persist the transcript to disk
+  // Appearance (user theme)
+  origColor: string
+  transColor: string
+  fontKey: FontKey
+  fontScale: FontScale
   // Interview mode (Phase 4)
   interviewMode: boolean
   assistantProvider: 'claude' | 'gemini' | 'openai' // which model powers interview suggestions
@@ -35,6 +40,39 @@ export interface KeyStatus {
 }
 
 const EMPTY_KEY_STATUS: KeyStatus = { available: true, gemini: false, openai: false, anthropic: false }
+
+// ── Appearance (user-customizable theme) ──────────────────────────
+export type FontKey = 'sans' | 'serif' | 'mono'
+export type FontScale = 'sm' | 'md' | 'lg'
+
+export const APPEARANCE_FONTS: Record<FontKey, string> = {
+  sans: "-apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif",
+  serif: "Georgia, 'Times New Roman', serif",
+  mono: "'SF Mono', Menlo, ui-monospace, monospace"
+}
+const FONT_SCALES: Record<FontScale, number> = { sm: 0.9, md: 1, lg: 1.18 }
+
+// Curated, sensible starting palettes (original = speaker, translation = target).
+export const APPEARANCE_PRESETS: { name: string; orig: string; trans: string }[] = [
+  { name: 'Amber (klasik)', orig: '#ffc56d', trans: '#ffffff' },
+  { name: 'Çeviri öne çıkar', orig: '#caa05e', trans: '#f1f2f6' },
+  { name: 'Mavi-beyaz', orig: '#ffc56d', trans: '#dbe6ff' },
+  { name: 'Yüksek kontrast', orig: '#ffd54a', trans: '#ffffff' }
+]
+
+export const APPEARANCE_DEFAULTS: {
+  origColor: string; transColor: string; fontKey: FontKey; fontScale: FontScale
+} = { origColor: '#ffc56d', transColor: '#ffffff', fontKey: 'sans', fontScale: 'md' }
+
+export function applyAppearance(s: {
+  origColor: string; transColor: string; fontKey: FontKey; fontScale: FontScale
+}): void {
+  const r = document.documentElement.style
+  r.setProperty('--halo-orig-color', s.origColor)
+  r.setProperty('--halo-trans-color', s.transColor)
+  r.setProperty('--halo-font', APPEARANCE_FONTS[s.fontKey] || APPEARANCE_FONTS.sans)
+  r.setProperty('--halo-scale', String(FONT_SCALES[s.fontScale] ?? 1))
+}
 
 // Map the model's question-type enum to a short Turkish badge label.
 export function qTypeLabel(type?: string): string {
@@ -58,6 +96,10 @@ function readSettings(): Settings {
     glossary:      localStorage.getItem('subtl_glossary') || '',
     speakerLabels: localStorage.getItem('subtl_speaker_labels') === '1',
     ephemeral:     localStorage.getItem('subtl_ephemeral') === '1',
+    origColor:     localStorage.getItem('subtl_orig_color') || APPEARANCE_DEFAULTS.origColor,
+    transColor:    localStorage.getItem('subtl_trans_color') || APPEARANCE_DEFAULTS.transColor,
+    fontKey:       (localStorage.getItem('subtl_font_key') as FontKey) || APPEARANCE_DEFAULTS.fontKey,
+    fontScale:     (localStorage.getItem('subtl_font_scale') as FontScale) || APPEARANCE_DEFAULTS.fontScale,
     interviewMode: localStorage.getItem('subtl_interview_mode') === '1',
     assistantProvider: (localStorage.getItem('subtl_assistant_provider') as 'claude' | 'gemini' | 'openai') || 'claude',
     cvText:        localStorage.getItem('subtl_cv_text') || ''
@@ -76,6 +118,9 @@ function pushInterviewConfig(s: Settings): void {
 }
 
 const DEFAULT_SETTINGS: Settings = readSettings()
+
+// Apply the saved theme as soon as this window loads (overlay / settings / session).
+applyAppearance(DEFAULT_SETTINGS)
 
 // Microphone (own voice). On macOS this is the 'mic' source; in interview mode
 // it also feeds the candidate transcription.
@@ -155,7 +200,7 @@ export default function App() {
     // Settings live in a separate window; pick up saved changes via the
     // storage event (fires in other same-origin windows) so the overlay
     // doesn't keep a stale API key until the app is restarted.
-    const onStorage = () => setSettings(readSettings())
+    const onStorage = () => { const s = readSettings(); setSettings(s); applyAppearance(s) }
     window.addEventListener('storage', onStorage)
 
     // Track the settings window so the gear button can toggle to ✕.
@@ -324,6 +369,11 @@ export default function App() {
     localStorage.setItem('subtl_glossary',       s.glossary)
     localStorage.setItem('subtl_speaker_labels', s.speakerLabels ? '1' : '0')
     localStorage.setItem('subtl_ephemeral',      s.ephemeral ? '1' : '0')
+    localStorage.setItem('subtl_orig_color',     s.origColor)
+    localStorage.setItem('subtl_trans_color',    s.transColor)
+    localStorage.setItem('subtl_font_key',       s.fontKey)
+    localStorage.setItem('subtl_font_scale',     s.fontScale)
+    applyAppearance(s)
     localStorage.setItem('subtl_interview_mode', s.interviewMode ? '1' : '0')
     localStorage.setItem('subtl_assistant_provider', s.assistantProvider)
     localStorage.setItem('subtl_cv_text',        s.cvText)

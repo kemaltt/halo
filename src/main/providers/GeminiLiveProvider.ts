@@ -12,12 +12,16 @@ export class GeminiLiveProvider extends TranslationProvider {
   private ws: WebSocket | null = null
   private originalBuf = ''
   private translatedBuf = ''
+  private turnStartedAt = 0
   private opts: ProviderOptions | null = null
   private finalizeTimer: NodeJS.Timeout | null = null
   private stopped = false
 
   // This model doesn't reliably send turnComplete; close a turn after a pause.
   private static PAUSE_MS = 1200
+  // …and force-close a turn that runs this long with no gap (continuous speech),
+  // so history gets chunked instead of never recording a "final".
+  private static MAX_TURN_MS = 8000
 
   async start(opts: ProviderOptions): Promise<void> {
     this.opts = opts
@@ -132,8 +136,10 @@ export class GeminiLiveProvider extends TranslationProvider {
     const inputText = sc.inputTranscription?.text
     const outputText = sc.outputTranscription?.text
 
+    const wasEmpty = !this.originalBuf && !this.translatedBuf
     if (inputText) this.originalBuf += inputText
     if (outputText) this.translatedBuf += outputText
+    if (wasEmpty && (this.originalBuf || this.translatedBuf)) this.turnStartedAt = Date.now()
 
     // Turn / generation boundary marks an utterance as complete.
     const isFinal = !!(sc.turnComplete || sc.generationComplete)
@@ -152,13 +158,19 @@ export class GeminiLiveProvider extends TranslationProvider {
       this.clearFinalizeTimer()
       this.originalBuf = ''
       this.translatedBuf = ''
+      this.turnStartedAt = 0
     } else if (inputText || outputText) {
       // Cap growth so a never-closing turn doesn't become an endless wall.
       const CAP = 400
       if (this.originalBuf.length > CAP) this.originalBuf = this.originalBuf.slice(-CAP)
       if (this.translatedBuf.length > CAP) this.translatedBuf = this.translatedBuf.slice(-CAP)
-      // (Re)arm the pause timer — a gap in speech finalizes the turn.
-      this.scheduleFinalize()
+      // Continuous speech never leaves a gap, so also force-close an over-long
+      // turn; otherwise (natural pause) the pause timer closes it.
+      if (this.turnStartedAt && Date.now() - this.turnStartedAt >= GeminiLiveProvider.MAX_TURN_MS) {
+        this.finalizeOnPause()
+      } else {
+        this.scheduleFinalize()
+      }
     }
   }
 
@@ -175,7 +187,7 @@ export class GeminiLiveProvider extends TranslationProvider {
   }
 
   private finalizeOnPause(): void {
-    this.finalizeTimer = null
+    this.clearFinalizeTimer()
     if (!this.originalBuf && !this.translatedBuf) return
     this.emitTranscript({
       original: this.originalBuf.trim(),
@@ -184,10 +196,13 @@ export class GeminiLiveProvider extends TranslationProvider {
     })
     this.originalBuf = ''
     this.translatedBuf = ''
+    this.turnStartedAt = 0
   }
 
   async stop(): Promise<void> {
     this.stopped = true
+    // Flush whatever's buffered as a final turn so the last utterance is recorded.
+    this.finalizeOnPause()
     this.clearFinalizeTimer()
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)

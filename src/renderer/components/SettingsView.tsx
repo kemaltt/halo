@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import type { Settings, ProviderType, KeyStatus } from '../App'
+import type { Settings, ProviderType, KeyStatus, FontKey, FontScale } from '../App'
+import { applyAppearance, APPEARANCE_PRESETS, APPEARANCE_DEFAULTS } from '../App'
 import type { SecretName } from '../env'
 
 // Custom dropdown — styled trigger + popover list, so the open menu matches the
@@ -257,6 +258,11 @@ export default function SettingsView({ settings, keyStatus, onSave }: Props) {
     }).catch(() => {})
   }, [])
 
+  // Live-apply the theme as the user tweaks it (instant preview in this window).
+  useEffect(() => {
+    applyAppearance({ origColor: form.origColor, transColor: form.transColor, fontKey: form.fontKey, fontScale: form.fontScale })
+  }, [form.origColor, form.transColor, form.fontKey, form.fontScale])
+
   const set = <K extends keyof Settings>(key: K, val: Settings[K]) =>
     setForm(f => ({ ...f, [key]: val }))
 
@@ -410,6 +416,74 @@ export default function SettingsView({ settings, keyStatus, onSave }: Props) {
         {/* ── Audio / microphone ── */}
         <section className="settings-card">
           <MicField deviceId={form.micDeviceId} onChange={v => set('micDeviceId', v)} />
+        </section>
+
+        {/* ── Appearance / theme ── */}
+        <section className="settings-card">
+          <div className="field">
+            <label className="toggle-row">
+              <span>Görünüm — hazır temalar</span>
+              <button
+                type="button"
+                className="reset-link"
+                onClick={() => setForm(f => ({ ...f, ...APPEARANCE_DEFAULTS }))}
+              >
+                ↺ Varsayılana sıfırla
+              </button>
+            </label>
+            <div className="preset-row">
+              {APPEARANCE_PRESETS.map(p => (
+                <button
+                  key={p.name}
+                  type="button"
+                  className="preset-btn"
+                  onClick={() => setForm(f => ({ ...f, origColor: p.orig, transColor: p.trans }))}
+                >
+                  <span className="preset-swatch" style={{ background: p.orig }} />
+                  <span className="preset-swatch" style={{ background: p.trans }} />
+                  {p.name}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="field">
+            <label>Renkler</label>
+            <div className="color-row">
+              <span>Orijinal (konuşan)</span>
+              <input type="color" className="color-input" value={form.origColor} onChange={e => set('origColor', e.target.value)} />
+            </div>
+            <div className="color-row">
+              <span>Çeviri</span>
+              <input type="color" className="color-input" value={form.transColor} onChange={e => set('transColor', e.target.value)} />
+            </div>
+          </div>
+
+          <div className="field">
+            <label>Yazı tipi</label>
+            <Dropdown
+              value={form.fontKey}
+              onChange={v => set('fontKey', v as FontKey)}
+              options={[{ value: 'sans', label: 'Sistem' }, { value: 'serif', label: 'Serif' }, { value: 'mono', label: 'Monospace' }]}
+            />
+          </div>
+
+          <div className="field">
+            <label>Yazı boyutu</label>
+            <Dropdown
+              value={form.fontScale}
+              onChange={v => set('fontScale', v as FontScale)}
+              options={[{ value: 'sm', label: 'Küçük' }, { value: 'md', label: 'Orta' }, { value: 'lg', label: 'Büyük' }]}
+            />
+          </div>
+
+          <div className="field">
+            <label>Önizleme</label>
+            <div className="theme-preview">
+              <div className="qa-orig">Yani bunlara belki esnaf arkadaşlarla görüştürüyoruz.</div>
+              <div className="qa-trans">Also, darauf vielleicht können die Händler sprechen.</div>
+            </div>
+          </div>
         </section>
 
         {/* ── Glossary / terms ── */}
